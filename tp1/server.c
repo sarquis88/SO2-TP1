@@ -1,24 +1,7 @@
-#include "utilidades.h"
+#include "server.h"
 
-uint32_t newsockfd, n;
+uint32_t newsockfd, n, intentos;
 char buffer[TAM];
-
-void recepcion();
-void enviar_a_socket(uint32_t, char*);
-void enviar_a_cliente(char*);
-void parse();
-void user_command(char*, char*);
-void file_command(char*, char*);
-void exit_command();
-void unknown_command(char*);
-uint32_t logueo();
-
-in_addr_t inet_addr(const char*);
-pid_t getpid(void);
-pid_t fork(void);
-uint32_t close(uint32_t fd);
-ssize_t read(uint32_t fd, void *buf, size_t count);
-ssize_t write(uint32_t fildes, const void *buf, size_t nbytes);
 
 uint32_t main( uint32_t argc, char *argv[] ) {
 
@@ -33,7 +16,7 @@ uint32_t main( uint32_t argc, char *argv[] ) {
         	fprintf( stderr, "Uso: %s <puerto>\n", argv[0] );
 		exit( 1 );
 	}
-	
+
 	sockfd = socket( AF_INET, SOCK_STREAM, 0);
 
 	memset( (char *) &serv_addr, 0, sizeof(serv_addr) );
@@ -50,7 +33,7 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		printf("SERVIDOR: Iniciando\n");
 		printf("SERVIDOR: Proceso: %d - Puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
 	}
-		
+
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
 
@@ -58,35 +41,58 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 	// ESPERAR CLIENTES NUEVOS
 	/////////////////////////////////////////////////////////////
 
-	while( 1 ) {
+	while(1) {
 		newsockfd = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
 
-		pid = fork(); 
+		pid = fork();
 
 		if ( pid == 0 ) {
 			// proceso hijo que atiende a cliente
-			
-		    close( sockfd );
 
-		    if(logueo() == 1)
-		    	printf("%d NUEVO CLIENTE\n", getpid() );
-		    else {
-		    	printf("%d LOGUEO FALLIDO\n", getpid() );
-		    	exit(0);
-		    }
-		    	
-		    while(1) {
-				recepcion();  	
-				parse();
-		    }
-		  }
+		    close( sockfd );
+				intentos = 0;
+				uint32_t log;
+
+				while(1) {
+					log = logueo();
+
+					if(log == 1) {
+			    	printf("%d NUEVO CLIENTE\n", getpid() );
+						enviar_a_cliente("1");
+						intentos = 0;
+						break;
+					}
+			    else if(log == 0) {
+						intentos++;
+						if(intentos >= LIMITE_INTENTOS) {
+							printf("%d USUARIO BLOQUEADO\n", getpid() );
+							enviar_a_cliente("9");
+							intentos = 0;
+							break;
+						}
+						else {
+				    	printf("%d LOGUEO INTENTO FALLIDO\n", getpid() );
+							enviar_a_cliente("0");
+						}
+			    }
+				}
+
+				if(log == 1) {
+					while(1) {
+						recepcion();
+						parse();
+			    }
+				}
+		    else
+					break;
+		}
 		else {
 			// proceso original del servidor
 			printf( "%d AUTENTICANDO\n", pid );
 			close( newsockfd );
 		}
 	}
-	return 0; 
+	return 0;
 }
 
 /**
@@ -126,14 +132,14 @@ void enviar_a_cliente(char* mensaje) {
  */
 void parse() {
 	buffer[strlen(buffer)-1] = '\0';
-	
+
 	char *mensaje, *comando, *opcion, *argumento;
 	uint32_t i = 0;
-	
+
 	mensaje = strtok(buffer, " ");
 	opcion = " ";
 	argumento = " ";
-	
+
 	while(mensaje != NULL) {
 		if(i == 0) {
 			comando = mensaje;
@@ -149,16 +155,16 @@ void parse() {
 		}
 		mensaje = strtok(NULL, " ");
 	}
-	
+
 	printf( "%d - %s %s %s\n", getpid(), comando, opcion, argumento);
-	
+
 	if( strcmp("exit", comando) == 0 )
 		exit_command();
 	else if( strcmp("user", comando) == 0 )
 		user_command(opcion, argumento);
 	else if( strcmp("file", comando) == 0 )
 		file_command(opcion, argumento);
-	else 
+	else
 		unknown_command(comando);
 }
 
@@ -174,7 +180,7 @@ void user_command(char *opcion, char *argumento) {
 	else if( strcmp("passwd", opcion) == 0 && strcmp(" ", argumento) != 0) {
 		char aux[] = "\nNueva contraseña: ";
 		char aux1[] = "\n";
-		
+
 		char *respuesta = malloc(strlen(aux) + strlen(aux1) + strlen(argumento) + 1);
 		strcat(respuesta, aux);
 		strcat(respuesta, argumento);
@@ -201,7 +207,7 @@ void file_command(char *opcion, char *argumento) {
 	else if( strcmp("down", opcion) == 0 && strcmp(" ", argumento) != 0) {
 		char aux[] = "\nArchivo descargado: ";
 		char aux1[] = "\n";
-		
+
 		char *respuesta = malloc(strlen(aux) + strlen(aux1) + strlen(argumento) + 1);
 		strcat(respuesta, aux);
 		strcat(respuesta, argumento);
@@ -232,38 +238,35 @@ void unknown_command(char * comando) {
 						"Comandos aceptados:\n"
 						"	- user\n"
 						"	- file\n"
-						"	- exit\n");	
+						"	- exit\n");
 }
 
-/*
- * Logueo de clientes
- * Funcion llamada en cada nuevo arrivo de cliente
- * INCOMPLETA (todos los logueos son exitosos)
+/**
+ * Proceso de inicio de sesion
+ * @return	0 para login fallido
+ *					1 para login exitoso
+ *					9 para usuario bloqueado
  */
 uint32_t logueo() {
-	enviar_a_cliente("\nUsuario: ");
-	recepcion();
-	char usuario[USER_SIZE];
-	strcpy(usuario, buffer);
-			
-	enviar_a_cliente("\nClave: ");
-	recepcion();
-	char clave[PASSWORD_SIZE];
-	strcpy(clave, buffer);
-	
-	for(int i = 0; i < strlen(usuario); i++) {
-		if(usuario[i] == 10) {
-			usuario[i] = '\0';
-		}
+	recepcion();	// recepcion de credenciales desde el cliente
+	char* login;
+
+	login = strtok(buffer, "-");
+	char usuario[strlen(login)];
+	strcpy(usuario, login);
+
+	login = strtok(NULL, "-");
+	char clave[strlen(login)];
+	strcpy(clave, login);
+
+	printf("%d USUARIO %s - CLAVE %s\n", getpid(), usuario, clave);
+
+	conectar(usuario, clave);
+
+	if(strcmp("Tomas", usuario) == 0) {
+		return 1;
 	}
-	
-	for(int i = 0; i < strlen(clave); i++) {
-		if(clave[i] == 10) {
-			clave[i] = '\0';
-		}
+	else {
+		return 0;
 	}
-	
-	printf("%d Usuario %s - Clave %s\n", getpid(), usuario, clave);
-	enviar_a_cliente("1");
-	return 1;
 }

@@ -1,13 +1,4 @@
-#include "utilidades.h"
-
-void recepcion();
-void escribir_a_servidor(uint32_t);
-void enviar_a_servidor(char*);
-uint32_t logueo();
-uint32_t fin(char[TAM]);
-
-ssize_t read(uint32_t fd, void *buf, size_t count);
-ssize_t write(uint32_t fildes, const void *buf, size_t nbytes);
+#include "cliente.h"
 
 char buffer[TAM];
 uint32_t sockfd, n;
@@ -45,14 +36,30 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 	/////////////////////////////////////////////////////////////
 	// INTENTO DE LOGUEO
 	/////////////////////////////////////////////////////////////
-	
-	if(logueo() == 0)
-		return 0;
-	
-	printf("\nConectado\n\n");
-	
+
+	uint32_t log;
 	while(1) {
-		
+		log = logueo();
+
+		if(log == 0) {
+			printf("\nLogin fallido, vuelva a intentar\n\n");
+		}
+		else if(log == 1) {
+			printf("\nConectado\n\n");
+			break;
+		}
+		else if(log == 9) {
+			printf("\nUsuario bloqueado\n\n");
+			log = 0;
+			break;
+		}
+	}
+
+	if(log != 1)
+		return 0;
+
+	while(1) {
+
 		/////////////////////////////////////////////////////////////
 		// ENVIO Y RECEPCION DE MENSAJES A SERVIDOR
 		/////////////////////////////////////////////////////////////
@@ -62,9 +69,9 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		if(buffer[0] != '\0') {
 			if(fin(buffer))
 				terminar = 1;
-			
+
 			recepcion();
-			
+
 			if(terminar == 0)
 				printf("%s\n", buffer);
 			else
@@ -72,7 +79,7 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		}
 	}
 	return 0;
-} 
+}
 
 /**
  * Recibe datos y los guarda en buffer
@@ -92,15 +99,15 @@ void recepcion() {
  */
 void escribir_a_servidor(uint32_t simbolo) {
 	uint32_t salir = 0;
-	
+
 	while(salir == 0) {
 		memset( buffer, '\0', TAM );
-		
+
 		if(simbolo == 1)
 			printf( "> " );
-		
+
 		fgets( buffer, TAM-1, stdin );
-		
+
 		if(buffer[0] != 10) {
 			n = write( sockfd, buffer, strlen(buffer) );
 			if ( n < 0 ) {
@@ -114,7 +121,7 @@ void escribir_a_servidor(uint32_t simbolo) {
 }
 
 /**
- * Envio de mensaje a servidor 
+ * Envio de mensaje a servidor
  */
 void enviar_a_servidor(char* mensaje) {
 	n = write( sockfd, mensaje, strlen(mensaje) );
@@ -126,25 +133,52 @@ void enviar_a_servidor(char* mensaje) {
 
 /**
  * Proceso de inicio de sesion
- * Si el servidor responde con un '1' : sesion exitosa
- * De lo contrario : sesion fallida
- * (la funcion retorna el valor 1 para sesion exitosa y 0 para fallida)
+ * @return	0 para login fallido
+ *					1 para login exitoso
+ *					9 para usuario bloqueado
  */
 uint32_t logueo() {
-	recepcion();	// usuario?
-	printf("%s", buffer);
-	escribir_a_servidor(0);
-	
-	recepcion();	// clave?
-	printf("%s", buffer);
-	escribir_a_servidor(0);
-	
-	recepcion();	// respuesta
-	
-	if( buffer[0] == '1')
+	char usuario[USER_SIZE];
+	char clave[PASSWORD_SIZE];
+	char login[strlen(usuario) + strlen(clave) + 2];
+
+	printf("Usuario: ");
+	fgets( usuario, TAM-1, stdin );
+	printf("Clave: ");
+	fgets( clave, TAM-1, stdin );
+
+	// formato de login: "usuario-clave"
+	uint32_t i = 0;
+	for(; i < strlen(usuario); i++) {
+		if(usuario[i] == 10) {
+			login[i] = '-';
+			i++;
+			break;
+		}
+		else
+			login[i] = usuario[i];
+	}
+	for(uint32_t j = 0; j < strlen(clave); j++) {
+		if(clave[j] == 10) {
+			login[i] = '\0';
+			break;
+		}
+		else {
+			login[i] = clave[j];
+			i++;
+		}
+	}
+	// fin formato de login
+
+	enviar_a_servidor(login); // envio de credenciales a servidor
+	recepcion();	// respuesta del servidor
+
+	if( buffer[0] == '1' )
 		return 1;
-	else
+	else if( buffer[0] == '0' )
 		return 0;
+	else
+		return 9;
 }
 
 /**
