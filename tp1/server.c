@@ -79,9 +79,10 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 						intentos++;
 						if(intentos >= LIMITE_INTENTOS) {
 							printf("%d USUARIO BLOQUEADO\n", getpid() );
+							bloquear_usuario(usuario_actual);
 							enviar_a_cliente("9");
 							intentos = 0;
-							break;
+							exit(0);
 						}
 						else {
 				    	printf("%d LOGUEO INTENTO FALLIDO\n", getpid() );
@@ -96,8 +97,6 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 						parse();
 			    }
 				}
-		    else
-					break;
 		}
 		else {
 			// proceso original del servidor
@@ -296,14 +295,17 @@ uint32_t logueo() {
 
 	for(uint32_t i = 0; i < CANT_USUARIOS	; i++) {
 		if( strcmp(nombres[i], usuario) == 0 ) {
+			free(usuario_actual);
+			usuario_actual = malloc(strlen(usuario));
+			strcpy(usuario_actual, usuario);
 			if( strcmp(claves[i], clave) == 0 ) {
-				if( strcmp(bloqueados[i], "0") == 0 ) {
-					usuario_actual = malloc(strlen(usuario));
-					strcpy(usuario_actual, usuario);
+				if( bloqueados[i][0] == '0' ) {
 					return 1;
 				}
-				else
+				else {
 					intentos = LIMITE_INTENTOS;
+					return 0;
+				}
 			}
 		}
 	}
@@ -343,5 +345,16 @@ void configurar_bloqueados(char* bloqueados_ptr) {
 		bloqueados[i] = malloc(strlen(auxiliar));
 		strcpy(bloqueados[i], auxiliar);
 		auxiliar = strtok(NULL, "\n");
+	}
+}
+
+void bloquear_usuario(char* nombre_usuario) {
+	uint32_t usuario_index = 0;
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+		if( strcmp(nombre_usuario, nombres[i]) == 0 ) {
+			bloquear(i);
+			strcpy(bloqueados[i], "1");
+			return;
+		}
 	}
 }

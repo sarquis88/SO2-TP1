@@ -13,6 +13,7 @@ void unknown_command(char*);
 void configurar_nombres(char*);
 void configurar_claves(char*);
 void configurar_bloqueados(char*);
+void bloquear_usuario(char*);
 uint32_t logueo();
 
 in_addr_t inet_addr(const char*);

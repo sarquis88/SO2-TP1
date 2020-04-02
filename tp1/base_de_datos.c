@@ -90,3 +90,24 @@ char* get_bloqueados() {
 
 	return bloqueados;
 }
+
+uint32_t bloquear(uint32_t usuario_index) {
+
+	usuarios[usuario_index]->bloqueado[0] = '1';
+
+	FILE *file;
+	file = fopen("usuarios", "w+");
+
+	if ( file != NULL ) {
+
+			for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+				fputs(usuarios[i]->nombre, file);
+				fputs(usuarios[i]->clave, file);
+				fputs(usuarios[i]->bloqueado, file);
+			}
+      fclose ( file );
+			return 0;
+  }
+	else
+		return 1;
+}
