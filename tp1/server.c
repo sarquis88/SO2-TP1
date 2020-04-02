@@ -1,7 +1,14 @@
 #include "server.h"
 
 uint32_t newsockfd, n, intentos;
+
 char buffer[TAM];
+
+char* nombres[CANT_USUARIOS];
+char* claves[CANT_USUARIOS];
+char* bloqueados[CANT_USUARIOS];
+
+char* usuario_actual;
 
 uint32_t main( uint32_t argc, char *argv[] ) {
 
@@ -33,6 +40,12 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		printf("SERVIDOR: Iniciando\n");
 		printf("SERVIDOR: Proceso: %d - Puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
 	}
+
+	conectar();
+
+	configurar_nombres(get_nombres());
+	configurar_claves(get_claves());
+	configurar_bloqueados(get_bloqueados());
 
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
@@ -173,9 +186,7 @@ void parse() {
  */
 void user_command(char *opcion, char *argumento) {
 	if( strcmp("ls", opcion) == 0 ) {
-		enviar_a_cliente(	"\nMostrando usuarios:\n"
-							"	- Elpe Lado\n"
-							"	- Dicky del Solar\n");
+		user_ls();
 	}
 	else if( strcmp("passwd", opcion) == 0 && strcmp(" ", argumento) != 0) {
 		char aux[] = "\nNueva contraseña: ";
@@ -193,6 +204,29 @@ void user_command(char *opcion, char *argumento) {
 							"	- ls : listado de usuarios\n"
 							"	- passwd <nueva contraseña> : cambio de contraseña\n");
 	}
+}
+
+/**
+ * Reaccion al comando user ls
+ */
+void user_ls() {
+	char* aux = "-- Usuarios --\n";
+	char* salto = "\n";
+	uint32_t size = strlen(aux) + strlen(salto) * (CANT_USUARIOS - 1);
+
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
+		size = size + strlen(nombres[i]);
+
+	char* tmp = malloc(size);
+	strcat(tmp, aux);
+
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+			strcat(tmp, nombres[i]);
+			strcat(tmp, salto);
+	}
+
+	enviar_a_cliente(tmp);
+	free(tmp);
 }
 
 /**
@@ -245,7 +279,6 @@ void unknown_command(char * comando) {
  * Proceso de inicio de sesion
  * @return	0 para login fallido
  *					1 para login exitoso
- *					9 para usuario bloqueado
  */
 uint32_t logueo() {
 	recepcion();	// recepcion de credenciales desde el cliente
@@ -261,12 +294,54 @@ uint32_t logueo() {
 
 	printf("%d USUARIO %s - CLAVE %s\n", getpid(), usuario, clave);
 
-	conectar(usuario, clave);
-
-	if(strcmp("Tomas", usuario) == 0) {
-		return 1;
+	for(uint32_t i = 0; i < CANT_USUARIOS	; i++) {
+		if( strcmp(nombres[i], usuario) == 0 ) {
+			if( strcmp(claves[i], clave) == 0 ) {
+				if( strcmp(bloqueados[i], "0") == 0 ) {
+					usuario_actual = malloc(strlen(usuario));
+					strcpy(usuario_actual, usuario);
+					return 1;
+				}
+				else
+					intentos = LIMITE_INTENTOS;
+			}
+		}
 	}
-	else {
-		return 0;
+	return 0;
+}
+
+/**
+ * Formatea los nombres en array
+ */
+void configurar_nombres(char* nombres_ptr) {
+	char* auxiliar = strtok(nombres_ptr, "\n");
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+		nombres[i] = malloc(strlen(auxiliar));
+		strcpy(nombres[i], auxiliar);
+		auxiliar = strtok(NULL, "\n");
+	}
+}
+
+/**
+ * Formatea las claves en array
+ */
+void configurar_claves(char* claves_ptr) {
+	char* auxiliar = strtok(claves_ptr, "\n");
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+		claves[i] = malloc(strlen(auxiliar));
+		strcpy(claves[i], auxiliar);
+		auxiliar = strtok(NULL, "\n");
+	}
+}
+
+/**
+ * Formatea los bloqueados en array
+ */
+void configurar_bloqueados(char* bloqueados_ptr) {
+	char* auxiliar = strtok(bloqueados_ptr, "\n");
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+		bloqueados[i] = malloc(strlen(auxiliar));
+		strcpy(bloqueados[i], auxiliar);
+		auxiliar = strtok(NULL, "\n");
 	}
 }

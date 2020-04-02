@@ -138,8 +138,8 @@ void enviar_a_servidor(char* mensaje) {
  *					9 para usuario bloqueado
  */
 uint32_t logueo() {
-	char usuario[USER_SIZE];
-	char clave[PASSWORD_SIZE];
+	char usuario[USUARIO_NOMBRE_SIZE];
+	char clave[USUARIO_CLAVE_SIZE];
 	char login[strlen(usuario) + strlen(clave) + 2];
 
 	printf("Usuario: ");
