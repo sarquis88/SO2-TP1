@@ -3,9 +3,10 @@
 void recepcion();
 void enviar_a_socket(uint32_t, char*);
 void enviar_a_cliente(char*);
-void parse();
-void user_command(char*, char*);
+void parse(char*);
+void user_command(char*, char*, char*);
 void user_ls();
+void user_passwd(char*, char*);
 void file_command(char*, char*);
 void exit_command();
 void unknown_command(char*);

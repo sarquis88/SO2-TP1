@@ -27,6 +27,11 @@
 // ids de mensajes
 #define LOGIN_REQUEST 80
 #define LOGIN_RESPONSE 81
+#define BLOQUEAR_USUARIO 82
+#define NOMBRES_REQUEST 83
+#define NOMBRES_RESPONSE 84
+#define CAMBIAR_CLAVE_REQUEST 85
+#define CAMBIAR_CLAVE_RESPONSE 86
 
 uint32_t get_cola(char);
 uint32_t enviar_a_cola(long, char*, char);

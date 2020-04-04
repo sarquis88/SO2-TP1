@@ -69,14 +69,40 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 
 		// handler para login request
 		if(mensaje_str.mtype == LOGIN_REQUEST) {
+			printf("auth_service: login request: %s\n", mensaje_str.mtext);
+			fflush(stdout);
 			uint32_t log = login(mensaje_str.mtext);
 
 			if(log == 0)
-				enviar_a_cola((long) LOGIN_RESPONSE, "0", 'p');
+				enviar_a_cola_local((long) LOGIN_RESPONSE, "0", 'p');
 			else if(log == 1)
-				enviar_a_cola((long) LOGIN_RESPONSE, "1", 'p');
+				enviar_a_cola_local((long) LOGIN_RESPONSE, "1", 'p');
 			else if(log == 9)
-				enviar_a_cola((long) LOGIN_RESPONSE, "9", 'p');
+				enviar_a_cola_local((long) LOGIN_RESPONSE, "9", 'p');
+		}
+		// handler para bloquear usuario
+		else if(mensaje_str.mtype == BLOQUEAR_USUARIO) {
+			printf("auth_service: bloquear usuario: %s\n", mensaje_str.mtext);
+			fflush(stdout);
+			if(bloquear_usuario(mensaje_str.mtext) == -1) {
+					perror("auth_service: Error al bloquear usuario: ");
+					exit(1);
+			}
+		}
+		// handler para nombre request
+		else if(mensaje_str.mtype == NOMBRES_REQUEST) {
+			printf("auth_service: nombres request\n");
+			fflush(stdout);
+
+			enviar_a_cola_local((long) NOMBRES_RESPONSE, get_nombres(), 'p');
+		}
+		// handler para cambiar contraseña request
+		else if(mensaje_str.mtype == CAMBIAR_CLAVE_REQUEST) {
+			printf("auth_service: cambiar clave request\n");
+			fflush(stdout);
+
+			cambiar_clave(mensaje_str.mtext);
+			enviar_a_cola_local((long) CAMBIAR_CLAVE_RESPONSE, "n", 'p');
 		}
 	}
 }
@@ -177,30 +203,6 @@ char* get_bloqueados() {
 }
 
 /**
- * Bloquea a un usuario, escribiendo un 1 en la base de datos
- */
-uint32_t bloquear(uint32_t usuario_index) {
-
-	usuarios[usuario_index]->bloqueado[0] = '1';
-
-	FILE *file;
-	file = fopen(DATA_FILE_NAME, "w+");
-
-	if ( file != NULL ) {
-
-			for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-				fputs(usuarios[i]->nombre, file);
-				fputs(usuarios[i]->clave, file);
-				fputs(usuarios[i]->bloqueado, file);
-			}
-      fclose ( file );
-			return 0;
-  }
-	else
-		return 1;
-}
-
-/**
  * Formatea los nombres en array
  */
 void configurar_nombres() {
@@ -237,17 +239,34 @@ void configurar_bloqueados() {
 }
 
 /**
- *
+ * Bloquea a usuario
  */
-void bloquear_usuario(char* nombre_usuario) {
-	uint32_t usuario_index = 0;
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-		if( strcmp(nombre_usuario, nombres[i]) == 0 ) {
-			bloquear(i);
-			strcpy(bloqueados[i], "1");
-			return;
+uint32_t bloquear_usuario(char* nombre_usuario) {
+	uint32_t index = 0;
+	for(; index < CANT_USUARIOS; index++) {
+		if( strcmp(nombre_usuario, nombres[index]) == 0 ) {
+			strcpy(bloqueados[index], "1");
+			break;
 		}
 	}
+
+	usuarios[index]->bloqueado[0] = '1';
+
+	FILE *file;
+	file = fopen(DATA_FILE_NAME, "w+");
+
+	if ( file != NULL ) {
+
+			for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+				fputs(usuarios[i]->nombre, file);
+				fputs(usuarios[i]->clave, file);
+				fputs(usuarios[i]->bloqueado, file);
+			}
+      fclose ( file );
+			return 0;
+  }
+	else
+		return -1;
 }
 
 uint32_t login(char* credenciales) {
@@ -273,4 +292,55 @@ uint32_t login(char* credenciales) {
 		}
 	}
 	return 0;
+}
+
+void enviar_a_cola_local(long id, char* mensaje, char proceso) {
+	if(enviar_a_cola(id, mensaje, proceso) == -1) {
+		perror("auth_service - enviando mensaje: ");
+		exit(1);
+	}
+}
+
+uint32_t cambiar_clave(char* credenciales_nuevas) {
+
+	char* aux = strtok(credenciales_nuevas, "-");
+	char* nombre = malloc(strlen(aux));
+	strcpy(nombre, aux);
+
+	aux = strtok(NULL, "\0");
+	char* linea = "\n";
+	char* nueva_clave = malloc(strlen(aux) + strlen(linea));
+	strcat(nueva_clave, aux);
+	strcat(nueva_clave, linea);
+
+	uint32_t index = 0;
+	for(; index < CANT_USUARIOS; index++) {
+		if( strcmp(nombre, nombres[index]) == 0 ) {
+			free(claves[index]);
+			claves[index] = malloc(strlen(nueva_clave));
+			strcpy(claves[index], nueva_clave);
+			claves[index][strlen(claves[index]) - 1] = '\0';
+			break;
+		}
+	}
+
+	strcpy(usuarios[index]->clave, nueva_clave);
+	free(nueva_clave);
+	free(nombre);
+
+	FILE *file;
+	file = fopen(DATA_FILE_NAME, "w+");
+
+	if ( file != NULL ) {
+
+			for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+				fputs(usuarios[i]->nombre, file);
+				fputs(usuarios[i]->clave, file);
+				fputs(usuarios[i]->bloqueado, file);
+			}
+      fclose ( file );
+			return 0;
+  }
+	else
+		return -1;
 }
