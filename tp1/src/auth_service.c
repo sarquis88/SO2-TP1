@@ -1,6 +1,16 @@
 #include "../include/auth_service.h"
 
+uint32_t intentos, qid;
+
 char buffer[TAM];
+
+char lineas[CANT_USUARIOS * 3][LINE_SIZE];
+
+char* nombres[USUARIO_NOMBRE_SIZE];
+char* claves[USUARIO_CLAVE_SIZE];
+char* bloqueados[USUARIO_BLOQUEADO_SIZE];
+
+Usuario* usuarios[CANT_USUARIOS];
 
 uint32_t main( uint32_t argc, char *argv[] ) {
 
@@ -27,7 +37,7 @@ uint32_t main( uint32_t argc, char *argv[] ) {
   servlen = strlen(serv_addr.sun_path) + sizeof(serv_addr.sun_family);
 
   if( bind( sockfd,(struct sockaddr *)&serv_addr,servlen )<0 ) {
-    perror( "ligadura" );
+    perror( "auth_service: ligadura" );
     exit(1);
   }
 	else {
@@ -35,22 +45,239 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		printf("auth_service: Proceso: %d - Socket: %s\n", getpid(), serv_addr.sun_path);
 	}
 
+	if(conectar()) {
+		perror("auth_service: Error al leer base de datos");
+		exit(1);
+	}
+	else {
+		configurar_nombres();
+		configurar_claves();
+		configurar_bloqueados();
+	}
+
+	qid = get_cola();
+	if(qid == -1) {
+		perror("auth_service: creando cola: ");
+		exit(1);
+	}
+
   listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
 
   while(1) {
 
+		char* mensaje = recibir_de_cola((long) LOGIN_REQUEST);
+		if(strcmp(mensaje,"n") == 0) {
+			perror("auth_service - recibiendo mensaje: ");
+			exit(1);
+		}
+		else {
+
+		}
+
 	}
 }
 
 /**
- * Recibe datos y los guarda en buffer
+ * Conexion a base de datos
+ * Creacion de usuarios
+ */
+uint32_t conectar() {
 
-void recepcion() {
-	memset( buffer, 0, TAM );
-	n = recv( newsockfd, buffer, TAM, 0 );
-	if ( n < 0 ) {
-	  perror( "SERVIDOR: Error: lectura de socket" );
-	  exit(1);
+	FILE *file;
+	file = fopen(DATA_FILE_NAME, "r");
+
+	if ( file != NULL ) {
+      char line[LINE_SIZE];
+
+			uint32_t index = 0;
+      while ( fgets( line, LINE_SIZE, file ) != NULL ) {
+				strcpy(lineas[index], line);
+				index++;
+      }
+      fclose ( file );
+  }
+	else
+		return 1;
+
+	for(uint32_t i = 0; i < CANT_USUARIOS * 3;) {
+		uint32_t usuario_index = i / CANT_USUARIOS;
+		usuarios[usuario_index] = malloc(sizeof(Usuario));
+
+		strcpy(usuarios[usuario_index]->nombre, lineas[i]);
+		i++;
+		strcpy(usuarios[usuario_index]->clave, lineas[i]);
+		i++;
+		strcpy(usuarios[usuario_index]->bloqueado, lineas[i]);
+		i++;
 	}
-}*/
+
+	return 0;
+}
+
+/**
+ * Retorna un puntero char con los nombres de todos los usuarios
+ * Formato: nombre1 + \n + nombre2 + \n nombre3 + \n
+ */
+char* get_nombres() {
+
+	uint32_t size = 0;
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
+		size = size + strlen(usuarios[i]->nombre);
+
+	char* nombres = malloc(	size );
+
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
+		strcat(nombres, usuarios[i]->nombre);
+
+	return nombres;
+}
+
+/**
+ * Retorna un puntero char con las claves de todos los usuarios
+ * Formato: clave1 + \n + clave2 + \n clave3 + \n
+ */
+char* get_claves() {
+
+	uint32_t size = 0;
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
+		size = size + strlen(usuarios[i]->clave);
+
+	char* claves = malloc( size );
+
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
+		strcat(claves, usuarios[i]->clave);
+
+	return claves;
+}
+
+/**
+ * Retorna un puntero char con los estados de todos los usuarios
+ * Formato: bloqueado1 + \n + bloqueado2 + \n bloqueado3 + \n
+ */
+char* get_bloqueados() {
+
+	uint32_t size = 0;
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
+		size = size + strlen(usuarios[i]->bloqueado);
+
+	char* bloqueados = malloc(	size );
+
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
+		strcat(bloqueados, usuarios[i]->bloqueado);
+
+	return bloqueados;
+}
+
+/**
+ * Bloquea a un usuario, escribiendo un 1 en la base de datos
+ */
+uint32_t bloquear(uint32_t usuario_index) {
+
+	usuarios[usuario_index]->bloqueado[0] = '1';
+
+	FILE *file;
+	file = fopen(DATA_FILE_NAME, "w+");
+
+	if ( file != NULL ) {
+
+			for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+				fputs(usuarios[i]->nombre, file);
+				fputs(usuarios[i]->clave, file);
+				fputs(usuarios[i]->bloqueado, file);
+			}
+      fclose ( file );
+			return 0;
+  }
+	else
+		return 1;
+}
+
+
+/**
+ * Proceso de inicio de sesion
+ * @return	0 para login fallido
+ *					1 para login exitoso
+
+uint32_t logueo() {
+	recepcion();	// recepcion de credenciales desde el cliente
+	char* login;
+
+	login = strtok(buffer, "-");
+	char usuario[strlen(login)];
+	strcpy(usuario, login);
+
+	login = strtok(NULL, "-");
+	char clave[strlen(login)];
+	strcpy(clave, login);
+
+	printf("%d USUARIO %s - CLAVE %s\n", getpid(), usuario, clave);
+
+	for(uint32_t i = 0; i < CANT_USUARIOS	; i++) {
+		if( strcmp(nombres[i], usuario) == 0 ) {
+			free(usuario_actual);
+			usuario_actual = malloc(strlen(usuario));
+			strcpy(usuario_actual, usuario);
+			if( strcmp(claves[i], clave) == 0 ) {
+				if( bloqueados[i][0] == '0' ) {
+					return 1;
+				}
+				else {
+					intentos = LIMITE_INTENTOS;
+					return 0;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
+/**
+ * Formatea los nombres en array
+ */
+void configurar_nombres() {
+	char* auxiliar = strtok(get_nombres(), "\n");
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+		nombres[i] = malloc(strlen(auxiliar));
+		strcpy(nombres[i], auxiliar);
+		auxiliar = strtok(NULL, "\n");
+	}
+}
+
+/**
+ * Formatea las claves en array
+ */
+void configurar_claves() {
+	char* auxiliar = strtok(get_claves(), "\n");
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+		claves[i] = malloc(strlen(auxiliar));
+		strcpy(claves[i], auxiliar);
+		auxiliar = strtok(NULL, "\n");
+	}
+}
+
+/**
+ * Formatea los bloqueados en array
+ */
+void configurar_bloqueados() {
+	char* auxiliar = strtok(get_bloqueados(), "\n");
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+		bloqueados[i] = malloc(strlen(auxiliar));
+		strcpy(bloqueados[i], auxiliar);
+		auxiliar = strtok(NULL, "\n");
+	}
+}
+
+/**
+ *
+ */
+void bloquear_usuario(char* nombre_usuario) {
+	uint32_t usuario_index = 0;
+	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
+		if( strcmp(nombre_usuario, nombres[i]) == 0 ) {
+			bloquear(i);
+			strcpy(bloqueados[i], "1");
+			return;
+		}
+	}
+}

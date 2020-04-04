@@ -1,12 +1,6 @@
 #include "../include/primary_server.h"
 
-uint32_t newsockfd, n, intentos;
-
-char* nombres[CANT_USUARIOS];
-char* claves[CANT_USUARIOS];
-char* bloqueados[CANT_USUARIOS];
-
-char* usuario_actual;
+uint32_t newsockfd, n, intentos, qid;
 
 char buffer[TAM];
 
@@ -31,21 +25,17 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 	serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	serv_addr.sin_port = htons( puerto );
 	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
-		perror( "SERVIDOR: Error" );
+		perror( "primary_server: Error" );
 		exit( 1 );
 	}
 	else {
-		printf("SERVIDOR: Iniciando\n");
-		printf("SERVIDOR: Proceso: %d - Puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
+		printf("primary_server: Iniciando\n");
+		printf("primary_server: Proceso: %d - Puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
 	}
 
-  if(!conectar()) {
-		configurar_nombres(get_nombres());
-		configurar_claves(get_claves());
-		configurar_bloqueados(get_bloqueados());
-	}
-	else {
-		perror("Servidor: Error al leer base de datos");
+	qid = get_cola();
+	if(qid == -1) {
+		perror("primary_server - creando cola: ");
 		exit(1);
 	}
 
@@ -69,6 +59,14 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 				uint32_t log;
 
 				while(1) {
+
+					recepcion();		// recepcion de credenciales por parte de cliente
+
+					enviar_a_cola_local((long) LOGIN_REQUEST, buffer); // reenvio a auth_service
+
+					char* respuesta = recibir_de_cola(LOGIN_RESPONSE); // respuesta de auth_service
+
+					/*
 					log = logueo();
 
 					if(log == 1) {
@@ -91,6 +89,7 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 							enviar_a_cliente("0");
 						}
 			    }
+					*/
 				}
 
 				if(log == 1) {
@@ -127,7 +126,7 @@ void recepcion() {
 void enviar_a_socket(uint32_t socket, char* mensaje) {
 	n = send( socket, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
-	  perror( "SERVIDOR: Error: envio a socket\n");
+	  perror( "primary_server: Error: envio a socket\n");
 	  exit( 1 );
 	}
 }
@@ -211,6 +210,7 @@ void user_command(char *opcion, char *argumento) {
  * Reaccion al comando user ls
  */
 void user_ls() {
+	/*
 	char* aux = "-- Usuarios --\n";
 	char* salto = "\n";
 	uint32_t size = strlen(aux) + strlen(salto) * (CANT_USUARIOS - 1);
@@ -228,6 +228,7 @@ void user_ls() {
 
 	enviar_a_cliente(tmp);
 	free(tmp);
+	*/
 }
 
 /**
@@ -276,87 +277,9 @@ void unknown_command(char * comando) {
 						"	- exit\n");
 }
 
-/**
- * Proceso de inicio de sesion
- * @return	0 para login fallido
- *					1 para login exitoso
- */
-uint32_t logueo() {
-	recepcion();	// recepcion de credenciales desde el cliente
-	char* login;
-
-	login = strtok(buffer, "-");
-	char usuario[strlen(login)];
-	strcpy(usuario, login);
-
-	login = strtok(NULL, "-");
-	char clave[strlen(login)];
-	strcpy(clave, login);
-
-	printf("%d USUARIO %s - CLAVE %s\n", getpid(), usuario, clave);
-
-	for(uint32_t i = 0; i < CANT_USUARIOS	; i++) {
-		if( strcmp(nombres[i], usuario) == 0 ) {
-			free(usuario_actual);
-			usuario_actual = malloc(strlen(usuario));
-			strcpy(usuario_actual, usuario);
-			if( strcmp(claves[i], clave) == 0 ) {
-				if( bloqueados[i][0] == '0' ) {
-					return 1;
-				}
-				else {
-					intentos = LIMITE_INTENTOS;
-					return 0;
-				}
-			}
-		}
-	}
-	return 0;
-}
-
-/**
- * Formatea los nombres en array
- */
-void configurar_nombres(char* nombres_ptr) {
-	char* auxiliar = strtok(nombres_ptr, "\n");
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-		nombres[i] = malloc(strlen(auxiliar));
-		strcpy(nombres[i], auxiliar);
-		auxiliar = strtok(NULL, "\n");
-	}
-}
-
-/**
- * Formatea las claves en array
- */
-void configurar_claves(char* claves_ptr) {
-	char* auxiliar = strtok(claves_ptr, "\n");
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-		claves[i] = malloc(strlen(auxiliar));
-		strcpy(claves[i], auxiliar);
-		auxiliar = strtok(NULL, "\n");
-	}
-}
-
-/**
- * Formatea los bloqueados en array
- */
-void configurar_bloqueados(char* bloqueados_ptr) {
-	char* auxiliar = strtok(bloqueados_ptr, "\n");
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-		bloqueados[i] = malloc(strlen(auxiliar));
-		strcpy(bloqueados[i], auxiliar);
-		auxiliar = strtok(NULL, "\n");
-	}
-}
-
-void bloquear_usuario(char* nombre_usuario) {
-	uint32_t usuario_index = 0;
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-		if( strcmp(nombre_usuario, nombres[i]) == 0 ) {
-			bloquear(i);
-			strcpy(bloqueados[i], "1");
-			return;
-		}
+void enviar_a_cola_local(long id, char* mensaje) {
+	if(enviar_a_cola(id, mensaje) == -1) {
+		perror("primary_server - enviando mensaje: ");
+		exit(1);
 	}
 }
