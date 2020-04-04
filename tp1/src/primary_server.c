@@ -1,6 +1,6 @@
 #include "../include/primary_server.h"
 
-uint32_t newsockfd, n, intentos, qid;
+uint32_t newsockfd, n, qid;
 
 char buffer[TAM];
 
@@ -33,11 +33,12 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		printf("primary_server: Proceso: %d - Puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
 	}
 
-	qid = get_cola();
+	qid = get_cola('p');
 	if(qid == -1) {
 		perror("primary_server - creando cola: ");
 		exit(1);
 	}
+	printf("primary_server: cola = %d\n", qid);
 
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
@@ -55,31 +56,22 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 			// proceso hijo que atiende a cliente
 
 		    close( sockfd );
-				intentos = 0;
+				uint32_t intentos = 0;
 				uint32_t log;
 
 				while(1) {
 
 					recepcion();		// recepcion de credenciales por parte de cliente
 
-					enviar_a_cola_local((long) LOGIN_REQUEST, buffer); // reenvio a auth_service
+					enviar_a_cola_local((long) LOGIN_REQUEST, buffer, 'a'); // reenvio a auth_service
 
-					char* respuesta = recibir_de_cola(LOGIN_RESPONSE); // respuesta de auth_service
+					char* respuesta = recibir_de_cola(LOGIN_RESPONSE, 'p').mtext; // respuesta de auth_service
 
-					/*
-					log = logueo();
-
-					if(log == 1) {
-			    	printf("%d NUEVO CLIENTE\n", getpid() );
-						enviar_a_cliente("1");
-						intentos = 0;
-						break;
-					}
-			    else if(log == 0) {
+					if( respuesta[0] == '0') {
 						intentos++;
 						if(intentos >= LIMITE_INTENTOS) {
 							printf("%d USUARIO BLOQUEADO\n", getpid() );
-							bloquear_usuario(usuario_actual);
+							//bloquear_usuario(usuario_actual);
 							enviar_a_cliente("9");
 							intentos = 0;
 							exit(0);
@@ -88,8 +80,21 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 				    	printf("%d LOGUEO INTENTO FALLIDO\n", getpid() );
 							enviar_a_cliente("0");
 						}
-			    }
-					*/
+					}
+					else if(respuesta[0] == '1') {
+						printf("%d NUEVO CLIENTE\n", getpid() );
+						enviar_a_cliente("1");
+						intentos = 0;
+						log = 1;
+						break;
+					}
+					else if(respuesta[0] == '9') {
+						printf("%d USUARIO BLOQUEADO\n", getpid() );
+						//bloquear_usuario(usuario_actual);
+						enviar_a_cliente("9");
+						intentos = 0;
+						exit(0);
+					}
 				}
 
 				if(log == 1) {
@@ -277,8 +282,8 @@ void unknown_command(char * comando) {
 						"	- exit\n");
 }
 
-void enviar_a_cola_local(long id, char* mensaje) {
-	if(enviar_a_cola(id, mensaje) == -1) {
+void enviar_a_cola_local(long id, char* mensaje, char proceso) {
+	if(enviar_a_cola(id, mensaje, proceso) == -1) {
 		perror("primary_server - enviando mensaje: ");
 		exit(1);
 	}

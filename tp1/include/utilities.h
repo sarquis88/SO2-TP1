@@ -19,16 +19,18 @@
 #define CANT_USUARIOS 3
 #define PROJ_ID 66
 #define DATA_FILE_NAME "resources/users_credentials"
-#define QUEUE_FILE_NAME "resources/queue"
+#define PRIMARY_QUEUE_FILE_NAME "resources/primary_queue"
+#define FILE_QUEUE_FILE_NAME "resources/file_queue"
+#define AUTH_QUEUE_FILE_NAME "resources/auth_queue"
 #define QUEUE_MESAGE_SIZE 64
 
 // ids de mensajes
-#define LOGIN_REQUEST 0
-#define LOGIN_RESPONSE 1
+#define LOGIN_REQUEST 80
+#define LOGIN_RESPONSE 81
 
-uint32_t get_cola();
-uint32_t enviar_a_cola(long, char*);
-char* recibir_de_cola(long);
+uint32_t get_cola(char);
+uint32_t enviar_a_cola(long, char*, char);
+struct msgbuf recibir_de_cola(long, char);
 
 ssize_t recv(int sockfd, void*, size_t, int);
 ssize_t send(int sockfd, const void*, size_t, int);

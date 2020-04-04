@@ -1,43 +1,57 @@
 #include "../include/utilities.h"
 
-uint32_t qid;
 /**
  * Creacion de cola
  * Retorna el id de la misma (puede ser -1 : error)
  */
-uint32_t get_cola() {
+uint32_t get_cola(char proceso) {
 
-  key_t qkey = ftok(QUEUE_FILE_NAME, PROJ_ID);
-
-  if (qkey == -1){
-    perror("Obteniendo token: ");
-    exit(EXIT_FAILURE);
+  key_t qkey;
+  if( proceso == 'p' )
+    qkey = ftok(PRIMARY_QUEUE_FILE_NAME, PROJ_ID);
+  else if( proceso == 'f')
+    qkey = ftok(FILE_QUEUE_FILE_NAME, PROJ_ID);
+  else if( proceso == 'a')
+    qkey = ftok(AUTH_QUEUE_FILE_NAME, PROJ_ID);
+  else {
+    printf("Error obteniendo token: proceso desconocido\n");
+    exit(1);
   }
 
-  qid = msgget(qkey, 0666 | IPC_CREAT);
-  return qid;
+  if (qkey == -1) {
+    perror("Obteniendo token: ");
+    exit(1);
+  }
+
+  return msgget(qkey, 0666 | IPC_CREAT);
 }
 
 /**
  * Envio de mensaje a cola
  */
-uint32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE]) {
+uint32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char proceso) {
   struct msgbuf mensaje_str;
   mensaje_str.mtype = id_mensaje;
   strcpy(mensaje_str.mtext, mensaje);
+
+  uint32_t qid = get_cola(proceso);
+
   return msgsnd(qid, &mensaje_str, sizeof mensaje_str.mtext, 0 );
 }
 
 /**
  * Recepcion de mensaje de la cola
  */
-char* recibir_de_cola(long id_mensaje) {
+struct msgbuf recibir_de_cola(long id_mensaje, char proceso) {
   struct msgbuf mensaje_str = {id_mensaje, {0}};
-  if(msgrcv(qid, &mensaje_str, sizeof mensaje_str.mtext, id_mensaje, 0) == -1)
-    return "n";
+
+  uint32_t qid = get_cola(proceso);
+
+  if(msgrcv(qid, &mensaje_str, sizeof mensaje_str.mtext, id_mensaje, 0) == -1) {
+      perror("Recibiendo mensaje de cola: ");
+      exit(1);
+  }
   else {
-    char* mensaje = malloc(strlen(mensaje_str.mtext));
-    strcpy(mensaje, mensaje_str.mtext);
-    return mensaje;
+    return mensaje_str;
   }
 }

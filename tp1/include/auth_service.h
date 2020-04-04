@@ -2,6 +2,7 @@
 
 uint32_t conectar();
 uint32_t bloquear(uint32_t);
+uint32_t login(char*);
 char* get_nombres();
 char* get_claves();
 char* get_bloqueados();

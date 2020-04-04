@@ -2,8 +2,6 @@
 
 uint32_t intentos, qid;
 
-char buffer[TAM];
-
 char lineas[CANT_USUARIOS * 3][LINE_SIZE];
 
 char* nombres[USUARIO_NOMBRE_SIZE];
@@ -55,28 +53,37 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		configurar_bloqueados();
 	}
 
-	qid = get_cola();
+	qid = get_cola('a');
 	if(qid == -1) {
 		perror("auth_service: creando cola: ");
 		exit(1);
 	}
+	printf("auth_service: cola = %d\n", qid);
 
   listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
 
   while(1) {
 
-		char* mensaje = recibir_de_cola((long) LOGIN_REQUEST);
-		if(strcmp(mensaje,"n") == 0) {
-			perror("auth_service - recibiendo mensaje: ");
-			exit(1);
-		}
-		else {
+		struct msgbuf mensaje_str = recibir_de_cola((long) 0, 'a');	// recibir cualquier tipo de mensajes
 
-		}
+		// handler para login request
+		if(mensaje_str.mtype == LOGIN_REQUEST) {
+			uint32_t log = login(mensaje_str.mtext);
 
+			if(log == 0)
+				enviar_a_cola((long) LOGIN_RESPONSE, "0", 'p');
+			else if(log == 1)
+				enviar_a_cola((long) LOGIN_RESPONSE, "1", 'p');
+			else if(log == 9)
+				enviar_a_cola((long) LOGIN_RESPONSE, "9", 'p');
+		}
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 
 /**
  * Conexion a base de datos
@@ -193,45 +200,6 @@ uint32_t bloquear(uint32_t usuario_index) {
 		return 1;
 }
 
-
-/**
- * Proceso de inicio de sesion
- * @return	0 para login fallido
- *					1 para login exitoso
-
-uint32_t logueo() {
-	recepcion();	// recepcion de credenciales desde el cliente
-	char* login;
-
-	login = strtok(buffer, "-");
-	char usuario[strlen(login)];
-	strcpy(usuario, login);
-
-	login = strtok(NULL, "-");
-	char clave[strlen(login)];
-	strcpy(clave, login);
-
-	printf("%d USUARIO %s - CLAVE %s\n", getpid(), usuario, clave);
-
-	for(uint32_t i = 0; i < CANT_USUARIOS	; i++) {
-		if( strcmp(nombres[i], usuario) == 0 ) {
-			free(usuario_actual);
-			usuario_actual = malloc(strlen(usuario));
-			strcpy(usuario_actual, usuario);
-			if( strcmp(claves[i], clave) == 0 ) {
-				if( bloqueados[i][0] == '0' ) {
-					return 1;
-				}
-				else {
-					intentos = LIMITE_INTENTOS;
-					return 0;
-				}
-			}
-		}
-	}
-	return 0;
-}
-
 /**
  * Formatea los nombres en array
  */
@@ -280,4 +248,29 @@ void bloquear_usuario(char* nombre_usuario) {
 			return;
 		}
 	}
+}
+
+uint32_t login(char* credenciales) {
+
+	char* login;
+
+	login = strtok(credenciales, "-");
+	char usuario[strlen(login)];
+	strcpy(usuario, login);
+
+	login = strtok(NULL, "-");
+	char clave[strlen(login)];
+	strcpy(clave, login);
+
+	for(uint32_t i = 0; i < CANT_USUARIOS	; i++) {
+		if( strcmp(nombres[i], usuario) == 0 ) {
+			if( strcmp(claves[i], clave) == 0 ) {
+				if( bloqueados[i][0] == '0' )
+					return 1;
+				else
+					return 9;
+			}
+		}
+	}
+	return 0;
 }

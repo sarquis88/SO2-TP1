@@ -9,4 +9,4 @@ void user_ls();
 void file_command(char*, char*);
 void exit_command();
 void unknown_command(char*);
-void enviar_a_cola_local(long, char*);
+void enviar_a_cola_local(long, char*, char);
