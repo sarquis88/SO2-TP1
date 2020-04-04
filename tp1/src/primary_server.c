@@ -1,14 +1,14 @@
-#include "server.h"
+#include "../include/primary_server.h"
 
 uint32_t newsockfd, n, intentos;
-
-char buffer[TAM];
 
 char* nombres[CANT_USUARIOS];
 char* claves[CANT_USUARIOS];
 char* bloqueados[CANT_USUARIOS];
 
 char* usuario_actual;
+
+char buffer[TAM];
 
 uint32_t main( uint32_t argc, char *argv[] ) {
 
@@ -25,13 +25,11 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 	}
 
 	sockfd = socket( AF_INET, SOCK_STREAM, 0);
-
 	memset( (char *) &serv_addr, 0, sizeof(serv_addr) );
 	puerto = atoi( argv[1] );
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	serv_addr.sin_port = htons( puerto );
-
 	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
 		perror( "SERVIDOR: Error" );
 		exit( 1 );
@@ -41,11 +39,15 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		printf("SERVIDOR: Proceso: %d - Puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
 	}
 
-	conectar();
-
-	configurar_nombres(get_nombres());
-	configurar_claves(get_claves());
-	configurar_bloqueados(get_bloqueados());
+  if(!conectar()) {
+		configurar_nombres(get_nombres());
+		configurar_claves(get_claves());
+		configurar_bloqueados(get_bloqueados());
+	}
+	else {
+		perror("Servidor: Error al leer base de datos");
+		exit(1);
+	}
 
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
@@ -112,7 +114,7 @@ uint32_t main( uint32_t argc, char *argv[] ) {
  */
 void recepcion() {
 	memset( buffer, 0, TAM );
-	n = read( newsockfd, buffer, TAM-1 );
+	n = recv( newsockfd, buffer, TAM, 0 );
 	if ( n < 0 ) {
 	  perror( "SERVIDOR: Error: lectura de socket" );
 	  exit(1);
@@ -123,7 +125,7 @@ void recepcion() {
  * Envia datos por el socket
  */
 void enviar_a_socket(uint32_t socket, char* mensaje) {
-	n = write( socket, mensaje, strlen(mensaje) );
+	n = send( socket, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
 	  perror( "SERVIDOR: Error: envio a socket\n");
 	  exit( 1 );

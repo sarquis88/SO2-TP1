@@ -1,4 +1,6 @@
-#include "utilidades.h"
+#include "utilities.h"
+
+#define DATA_FILE_NAME "resources/users_credentials"
 
 uint32_t conectar();
 char* get_nombres();

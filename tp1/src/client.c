@@ -1,4 +1,4 @@
-#include "cliente.h"
+#include "../include/client.h"
 
 char buffer[TAM];
 uint32_t sockfd, n;
@@ -86,7 +86,7 @@ uint32_t main( uint32_t argc, char *argv[] ) {
  */
 void recepcion() {
 	memset( buffer, 0, TAM );
-	n = read( sockfd, buffer, TAM-1 );
+	n = recv( sockfd, buffer, TAM, 0 );
 	if ( n < 0 ) {
 	  perror( "CLIENTE: Error: lectura de socket" );
 	  exit(1);
@@ -109,7 +109,7 @@ void escribir_a_servidor(uint32_t simbolo) {
 		fgets( buffer, TAM-1, stdin );
 
 		if(buffer[0] != 10) {
-			n = write( sockfd, buffer, strlen(buffer) );
+			n = send( sockfd, buffer, strlen(buffer), 0 );
 			if ( n < 0 ) {
 			  perror( "CLIENTE: Error: envio a socket\n");
 			  exit( 1 );
@@ -124,7 +124,7 @@ void escribir_a_servidor(uint32_t simbolo) {
  * Envio de mensaje a servidor
  */
 void enviar_a_servidor(char* mensaje) {
-	n = write( sockfd, mensaje, strlen(mensaje) );
+	n = send( sockfd, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
 	  perror( "CLIENTE: Error: envio a socket\n");
 	  exit( 1 );

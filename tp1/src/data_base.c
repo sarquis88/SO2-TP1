@@ -1,4 +1,4 @@
-#include "base_de_datos.h"
+#include "../include/data_base.h"
 
 char lineas[CANT_USUARIOS * 3][LINE_SIZE];
 
@@ -7,7 +7,7 @@ Usuario* usuarios[CANT_USUARIOS];
 uint32_t conectar() {
 
 	FILE *file;
-	file = fopen("usuarios", "r");
+	file = fopen(DATA_FILE_NAME, "r");
 
 	if ( file != NULL ) {
       char line[LINE_SIZE];
@@ -96,7 +96,7 @@ uint32_t bloquear(uint32_t usuario_index) {
 	usuarios[usuario_index]->bloqueado[0] = '1';
 
 	FILE *file;
-	file = fopen("usuarios", "w+");
+	file = fopen(DATA_FILE_NAME, "w+");
 
 	if ( file != NULL ) {
 
