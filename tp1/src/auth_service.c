@@ -1,84 +1,57 @@
 #include "../include/auth_service.h"
 
-uint32_t intentos, qid;
-
-char lineas[CANT_USUARIOS * 3][LINE_SIZE];
-
-char* nombres[USUARIO_NOMBRE_SIZE];
-char* claves[USUARIO_CLAVE_SIZE];
-char* bloqueados[USUARIO_BLOQUEADO_SIZE];
-
+// definicion de variables
+int32_t intentos, qid, sockfd, servlen;
+struct sockaddr_un serv_addr;
 Usuario* usuarios[CANT_USUARIOS];
 
-uint32_t main( uint32_t argc, char *argv[] ) {
+/**
+ * Funcion main
+ */
+int32_t main( int32_t argc, char *argv[] ) {
 
-	int sockfd, newsockfd, servlen, clilen, n, buf, pid;
-  struct sockaddr_un  cli_addr, serv_addr;
+	// configuracion de socket
+	configurar_socket();
 
-	/* Se toma el nombre del socket de la línea de comandos */
-  if( argc != 2 ) {
-    printf( "Uso: %s <nombre_de_socket>\n", argv[0] );
-    exit( 1 );
-  }
-
-	if ( ( sockfd = socket( AF_UNIX, SOCK_STREAM, 0) ) < 0 ) {
-    perror( "creación de  socket");
-    exit(1);
-  }
-
-	/* Remover el nombre de archivo si existe */
-	unlink ( argv[1] );
-
-	memset( &serv_addr, 0, sizeof(serv_addr) );
-  serv_addr.sun_family = AF_UNIX;
-  strcpy( serv_addr.sun_path, argv[1] );
-  servlen = strlen(serv_addr.sun_path) + sizeof(serv_addr.sun_family);
-
-  if( bind( sockfd,(struct sockaddr *)&serv_addr,servlen )<0 ) {
-    perror( "auth_service: ligadura" );
-    exit(1);
-  }
-	else {
-		printf("auth_service: Iniciando\n");
-		printf("auth_service: Proceso: %d - Socket: %s\n", getpid(), serv_addr.sun_path);
-	}
-
+	// levantar base de datos
 	if(conectar()) {
 		perror("auth_service: Error al leer base de datos");
 		exit(1);
 	}
-	else {
-		configurar_nombres();
-		configurar_claves();
-		configurar_bloqueados();
-	}
 
+	// creacion de cola
 	qid = get_cola('a');
 	if(qid == -1) {
 		perror("auth_service: creando cola: ");
 		exit(1);
 	}
-	printf("auth_service: cola = %d\n", qid);
+	printf("auth_service: Cola = %d\n", qid);
+	fflush(stdout);
 
+	// empezar a escuchar mensajes en cola y por socket
   listen( sockfd, 5 );
-	clilen = sizeof( cli_addr );
-
   while(1) {
 
-		struct msgbuf mensaje_str = recibir_de_cola((long) 0, 'a');	// recibir cualquier tipo de mensajes
+		// recibir cualquier tipo de mensajes
+		struct msgbuf mensaje_str = recibir_de_cola((long) 0, 'a');
 
 		// handler para login request
 		if(mensaje_str.mtype == LOGIN_REQUEST) {
 			printf("auth_service: login request: %s\n", mensaje_str.mtext);
 			fflush(stdout);
-			uint32_t log = login(mensaje_str.mtext);
+			int32_t log = login(mensaje_str.mtext);
 
+			char rta[2];
 			if(log == 0)
-				enviar_a_cola_local((long) LOGIN_RESPONSE, "0", 'p');
+				strcpy(rta, "0");
 			else if(log == 1)
-				enviar_a_cola_local((long) LOGIN_RESPONSE, "1", 'p');
+				strcpy(rta, "1");
 			else if(log == 9)
-				enviar_a_cola_local((long) LOGIN_RESPONSE, "9", 'p');
+				strcpy(rta, "9");
+
+			enviar_a_cola_local((long) LOGIN_RESPONSE, rta, 'p');
+			printf("auth_service: login response (rta: %s)\n", rta);
+			fflush(stdout);
 		}
 		// handler para bloquear usuario
 		else if(mensaje_str.mtype == BLOQUEAR_USUARIO) {
@@ -94,7 +67,24 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 			printf("auth_service: nombres request\n");
 			fflush(stdout);
 
-			enviar_a_cola_local((long) NOMBRES_RESPONSE, get_nombres(), 'p');
+			int32_t size = 0;
+			char* aux = " --> ";
+			char* salto = "\n";
+			for(int32_t i = 0; i < CANT_USUARIOS; i++)
+				size = size + strlen(usuarios[i]->nombre) + strlen(aux) + strlen(usuarios[i]->ultima_conexion) + strlen(salto);
+
+			char users_info[size];
+			strcpy(users_info, "\0");
+
+			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+				strcat(users_info, usuarios[i]->nombre);
+				strcat(users_info, aux);
+				strcat(users_info, usuarios[i]->ultima_conexion);
+				strcat(users_info, salto);
+			}
+			enviar_a_cola_local((long) NOMBRES_RESPONSE, users_info, 'p');
+			printf("auth_service: nombres response\n");
+			fflush(stdout);
 		}
 		// handler para cambiar contraseña request
 		else if(mensaje_str.mtype == CAMBIAR_CLAVE_REQUEST) {
@@ -103,27 +93,58 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 
 			cambiar_clave(mensaje_str.mtext);
 			enviar_a_cola_local((long) CAMBIAR_CLAVE_RESPONSE, "n", 'p');
+			printf("auth_service: cambiar clave response\n");
+			fflush(stdout);
 		}
 	}
+	exit(0);
 }
 
-//////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
+/**
+ * Levantamiento de socket
+ */
+void configurar_socket() {
+	// creacion de socket
+	if ( ( sockfd = socket( AF_UNIX, SOCK_STREAM, 0) ) < 0 ) {
+    perror( "Creación de  socket");
+    exit(1);
+  }
+
+	// Remover el nombre de archivo si existe
+	unlink ( SOCKET_PATH );
+
+	// configuracion de socket
+	memset( &serv_addr, 0, sizeof(serv_addr) );
+  serv_addr.sun_family = AF_UNIX;
+  strcpy( serv_addr.sun_path, SOCKET_PATH );
+  servlen = strlen(serv_addr.sun_path) + sizeof(serv_addr.sun_family);
+
+	// conexion de socket
+  if( bind( sockfd,(struct sockaddr *)&serv_addr,servlen )<0 ) {
+    perror( "auth_service: ligadura" );
+    exit(1);
+  }
+	else {
+		printf("auth_service: Iniciando\n");
+		printf("auth_service: Proceso: %d - Socket: %s\n", getpid(), serv_addr.sun_path);
+		fflush(stdout);
+	}
+}
 
 /**
  * Conexion a base de datos
  * Creacion de usuarios
  */
-uint32_t conectar() {
+int32_t conectar() {
 
+	char lineas[CANT_USUARIOS * 4][LINE_SIZE];
 	FILE *file;
 	file = fopen(DATA_FILE_NAME, "r");
 
 	if ( file != NULL ) {
       char line[LINE_SIZE];
 
-			uint32_t index = 0;
+			int32_t index = 0;
       while ( fgets( line, LINE_SIZE, file ) != NULL ) {
 				strcpy(lineas[index], line);
 				index++;
@@ -133,16 +154,18 @@ uint32_t conectar() {
 	else
 		return 1;
 
-	for(uint32_t i = 0; i < CANT_USUARIOS * 3;) {
-		uint32_t usuario_index = i / CANT_USUARIOS;
+	for(int32_t i = 0; i < CANT_USUARIOS * 4;) {
+		int32_t usuario_index = i / CANT_USUARIOS;
 		usuarios[usuario_index] = malloc(sizeof(Usuario));
 
-		strcpy(usuarios[usuario_index]->nombre, lineas[i]);
-		i++;
-		strcpy(usuarios[usuario_index]->clave, lineas[i]);
-		i++;
-		strcpy(usuarios[usuario_index]->bloqueado, lineas[i]);
-		i++;
+		strcpy(usuarios[usuario_index]->nombre, lineas[i++]);
+		usuarios[usuario_index]->nombre[strlen(usuarios[usuario_index]->nombre) - 1] = '\0';
+		strcpy(usuarios[usuario_index]->clave, lineas[i++]);
+		usuarios[usuario_index]->clave[strlen(usuarios[usuario_index]->clave) - 1] = '\0';
+		strcpy(usuarios[usuario_index]->bloqueado, lineas[i++]);
+		usuarios[usuario_index]->bloqueado[strlen(usuarios[usuario_index]->bloqueado) - 1] = '\0';
+		strcpy(usuarios[usuario_index]->ultima_conexion, lineas[i++]);
+		usuarios[usuario_index]->ultima_conexion[strlen(usuarios[usuario_index]->ultima_conexion) - 1] = '\0';
 	}
 
 	return 0;
@@ -154,138 +177,125 @@ uint32_t conectar() {
  */
 char* get_nombres() {
 
-	uint32_t size = 0;
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
-		size = size + strlen(usuarios[i]->nombre);
+	int32_t size = 0;
+	char* aux = "\n";
+	for(int32_t i = 0; i < CANT_USUARIOS; i++)
+		size = size + strlen(usuarios[i]->nombre) + strlen(aux);
 
 	char* nombres = malloc(	size );
+	strcpy(nombres, "\0");
 
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
+	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
 		strcat(nombres, usuarios[i]->nombre);
-
+		strcat(nombres, aux);
+	}
 	return nombres;
 }
 
 /**
- * Retorna un puntero char con las claves de todos los usuarios
- * Formato: clave1 + \n + clave2 + \n clave3 + \n
+ * Retorna un puntero char con las ultimas conexiones de todos los usuarios
+ * Formato: ultima_conexion1 + \n + ultima_conexion2 + \n ultima_conexion3 + \n
  */
-char* get_claves() {
+char* get_ultimas_conexiones() {
 
-	uint32_t size = 0;
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
-		size = size + strlen(usuarios[i]->clave);
+	int32_t size = 0;
+	char* aux = "\n";
+	for(int32_t i = 0; i < CANT_USUARIOS; i++)
+		size = size + strlen(usuarios[i]->ultima_conexion) + strlen(aux);
 
-	char* claves = malloc( size );
+	char* ultimas_conexiones = malloc( size );
+	strcpy(ultimas_conexiones, "\0");
 
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
-		strcat(claves, usuarios[i]->clave);
-
-	return claves;
-}
-
-/**
- * Retorna un puntero char con los estados de todos los usuarios
- * Formato: bloqueado1 + \n + bloqueado2 + \n bloqueado3 + \n
- */
-char* get_bloqueados() {
-
-	uint32_t size = 0;
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
-		size = size + strlen(usuarios[i]->bloqueado);
-
-	char* bloqueados = malloc(	size );
-
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++)
-		strcat(bloqueados, usuarios[i]->bloqueado);
-
-	return bloqueados;
-}
-
-/**
- * Formatea los nombres en array
- */
-void configurar_nombres() {
-	char* auxiliar = strtok(get_nombres(), "\n");
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-		nombres[i] = malloc(strlen(auxiliar));
-		strcpy(nombres[i], auxiliar);
-		auxiliar = strtok(NULL, "\n");
+	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+		strcat(ultimas_conexiones, usuarios[i]->ultima_conexion);
+		strcat(ultimas_conexiones, aux);
 	}
+	return ultimas_conexiones;
 }
 
 /**
- * Formatea las claves en array
+ * Bloqueo de usuario
  */
-void configurar_claves() {
-	char* auxiliar = strtok(get_claves(), "\n");
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-		claves[i] = malloc(strlen(auxiliar));
-		strcpy(claves[i], auxiliar);
-		auxiliar = strtok(NULL, "\n");
-	}
-}
-
-/**
- * Formatea los bloqueados en array
- */
-void configurar_bloqueados() {
-	char* auxiliar = strtok(get_bloqueados(), "\n");
-	for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-		bloqueados[i] = malloc(strlen(auxiliar));
-		strcpy(bloqueados[i], auxiliar);
-		auxiliar = strtok(NULL, "\n");
-	}
-}
-
-/**
- * Bloquea a usuario
- */
-uint32_t bloquear_usuario(char* nombre_usuario) {
-	uint32_t index = 0;
-	for(; index < CANT_USUARIOS; index++) {
-		if( strcmp(nombre_usuario, nombres[index]) == 0 ) {
-			strcpy(bloqueados[index], "1");
+int32_t bloquear_usuario(char* nombre_usuario) {
+	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+		if( strcmp(nombre_usuario, usuarios[i]->nombre) == 0 ) {
+			usuarios[i]->bloqueado[0] = '1';
 			break;
 		}
 	}
-
-	usuarios[index]->bloqueado[0] = '1';
-
-	FILE *file;
-	file = fopen(DATA_FILE_NAME, "w+");
-
-	if ( file != NULL ) {
-
-			for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-				fputs(usuarios[i]->nombre, file);
-				fputs(usuarios[i]->clave, file);
-				fputs(usuarios[i]->bloqueado, file);
-			}
-      fclose ( file );
-			return 0;
-  }
-	else
-		return -1;
+	return refresh_datos();
 }
 
-uint32_t login(char* credenciales) {
+/**
+ * Cambio de clave a usuario
+ * Formato de credenciales_nuevas: "nombre-nueva_clave"
+ */
+int32_t cambiar_clave(char* credenciales_nuevas) {
+
+	char* aux = strtok(credenciales_nuevas, "-");
+	char nombre[strlen(aux)];
+	strcpy(nombre, aux);
+
+	aux = strtok(NULL, "\0");
+	char nueva_clave[strlen(aux)];
+	strcpy(nueva_clave, aux);
+
+	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {
+			strcpy(usuarios[i]->clave, nueva_clave);
+			break;
+		}
+	}
+	return refresh_datos();
+}
+
+/**
+ * Actualizacion de ultima conexion
+ * Funcion llamada al logearse un usuario
+ */
+int32_t set_ultima_conexion(char* usuario) {
+
+	time_t t = time(NULL);
+  struct tm tm = *localtime(&t);
+	char nueva_ultima_conexion[USUARIO_ULTIMA_CONEXION_SIZE];
+  sprintf(nueva_ultima_conexion, "%d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900,
+	 tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+		if( strcmp(usuario, usuarios[i]->nombre) == 0 ) {
+			strcpy(usuarios[i]->ultima_conexion, nueva_ultima_conexion);
+			break;
+		}
+	}
+	return refresh_datos();
+}
+
+/**
+ * Proceso de login
+ * Se chequea que las credenciales sean las correctas
+ * Retorna:	0 -> login fallido
+ *					1 -> login exitoso
+ *					9 -> usuario bloqueado
+ */
+int32_t login(char* credenciales) {
 
 	char* login;
 
 	login = strtok(credenciales, "-");
-	char usuario[strlen(login)];
-	strcpy(usuario, login);
+	char nombre[strlen(login)];
+	strcpy(nombre, login);
 
 	login = strtok(NULL, "-");
 	char clave[strlen(login)];
 	strcpy(clave, login);
 
-	for(uint32_t i = 0; i < CANT_USUARIOS	; i++) {
-		if( strcmp(nombres[i], usuario) == 0 ) {
-			if( strcmp(claves[i], clave) == 0 ) {
-				if( bloqueados[i][0] == '0' )
+	for(int32_t i = 0; i < CANT_USUARIOS	; i++) {
+		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {
+			if( strcmp(clave, usuarios[i]->clave) == 0 ) {
+				if( strcmp(usuarios[i]->bloqueado, "0") == 0 ) {
+					set_ultima_conexion(nombre);
 					return 1;
+				}
 				else
 					return 9;
 			}
@@ -294,6 +304,38 @@ uint32_t login(char* credenciales) {
 	return 0;
 }
 
+/**
+ * Escritura de datos en base de datos
+ * Funcion llamada al cambiar algun dato
+ */
+int32_t refresh_datos() {
+	FILE *file;
+	file = fopen(DATA_FILE_NAME, "w+");
+
+	if ( file != NULL ) {
+
+			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+				fputs(usuarios[i]->nombre, file);
+				fputs("\n", file);
+				fputs(usuarios[i]->clave, file);
+				fputs("\n", file);
+				fputs(usuarios[i]->bloqueado, file);
+				fputs("\n", file);
+				fputs(usuarios[i]->ultima_conexion, file);
+				fputs("\n", file);
+			}
+      fclose ( file );
+			return 0;
+  }
+	else
+		return -1;
+
+	return 0;
+}
+
+/**
+ * Enviar mensaje a cola de mensaje
+ */
 void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 	if(enviar_a_cola(id, mensaje, proceso) == -1) {
 		perror("auth_service - enviando mensaje: ");
@@ -301,46 +343,45 @@ void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 	}
 }
 
-uint32_t cambiar_clave(char* credenciales_nuevas) {
+/**
+ * Retorna un puntero char con las claves de todos los usuarios
+ * Formato: clave1 + \n + clave2 + \n clave3 + \n
+ /
+char* get_claves() {
 
-	char* aux = strtok(credenciales_nuevas, "-");
-	char* nombre = malloc(strlen(aux));
-	strcpy(nombre, aux);
+	int32_t size = 0;
+	char* aux = "\n";
+	for(int32_t i = 0; i < CANT_USUARIOS; i++)
+		size = size + strlen(usuarios[i]->clave) + strlen(aux);
 
-	aux = strtok(NULL, "\0");
-	char* linea = "\n";
-	char* nueva_clave = malloc(strlen(aux) + strlen(linea));
-	strcat(nueva_clave, aux);
-	strcat(nueva_clave, linea);
+	char* claves = malloc( size );
+	strcpy(claves, "\0");
 
-	uint32_t index = 0;
-	for(; index < CANT_USUARIOS; index++) {
-		if( strcmp(nombre, nombres[index]) == 0 ) {
-			free(claves[index]);
-			claves[index] = malloc(strlen(nueva_clave));
-			strcpy(claves[index], nueva_clave);
-			claves[index][strlen(claves[index]) - 1] = '\0';
-			break;
-		}
+	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+		strcat(claves, usuarios[i]->clave);
+		strcat(claves, aux);
 	}
-
-	strcpy(usuarios[index]->clave, nueva_clave);
-	free(nueva_clave);
-	free(nombre);
-
-	FILE *file;
-	file = fopen(DATA_FILE_NAME, "w+");
-
-	if ( file != NULL ) {
-
-			for(uint32_t i = 0; i < CANT_USUARIOS; i++) {
-				fputs(usuarios[i]->nombre, file);
-				fputs(usuarios[i]->clave, file);
-				fputs(usuarios[i]->bloqueado, file);
-			}
-      fclose ( file );
-			return 0;
-  }
-	else
-		return -1;
+	return claves;
 }
+
+
+ * Retorna un puntero char con los estados de todos los usuarios
+ * Formato: bloqueado1 + \n + bloqueado2 + \n bloqueado3 + \n
+ /
+char* get_bloqueados() {
+
+	int32_t size = 0;
+	char* aux = "\n";
+	for(int32_t i = 0; i < CANT_USUARIOS; i++)
+		size = size + strlen(usuarios[i]->bloqueado) + strlen(aux);
+
+	char* bloqueados = malloc(size);
+	strcpy(bloqueados, "\0");
+
+	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+		strcat(bloqueados, usuarios[i]->bloqueado);
+		strcat(bloqueados, aux);
+	}
+	return bloqueados;
+}
+*/

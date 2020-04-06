@@ -4,7 +4,7 @@
  * Creacion de cola
  * Retorna el id de la misma (puede ser -1 : error)
  */
-uint32_t get_cola(char proceso) {
+int32_t get_cola(char proceso) {
 
   key_t qkey;
   if( proceso == 'p' )
@@ -29,12 +29,17 @@ uint32_t get_cola(char proceso) {
 /**
  * Envio de mensaje a cola
  */
-uint32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char proceso) {
+int32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char proceso) {
+
+  if(strlen(mensaje) > QUEUE_MESAGE_SIZE) {
+    perror("Mensaje muy grande\n");
+    exit(1);
+  }
   struct msgbuf mensaje_str;
   mensaje_str.mtype = id_mensaje;
   strcpy(mensaje_str.mtext, mensaje);
 
-  uint32_t qid = get_cola(proceso);
+  int32_t qid = get_cola(proceso);
 
   return msgsnd(qid, &mensaje_str, sizeof mensaje_str.mtext, 0 );
 }
@@ -45,7 +50,7 @@ uint32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char pr
 struct msgbuf recibir_de_cola(long id_mensaje, char proceso) {
   struct msgbuf mensaje_str = {id_mensaje, {0}};
 
-  uint32_t qid = get_cola(proceso);
+  int32_t qid = get_cola(proceso);
 
   if(msgrcv(qid, &mensaje_str, sizeof mensaje_str.mtext, id_mensaje, 0) == -1) {
       perror("Recibiendo mensaje de cola: ");

@@ -1,28 +1,75 @@
 #include "../include/client.h"
 
-char buffer[TAM];
-uint32_t sockfd, n;
+char buffer[BUFFER_SIZE];
+int32_t sockfd, n, puerto, terminar, logueo_response;
+struct sockaddr_in serv_addr;
+struct hostent *server;
 
-uint32_t main( uint32_t argc, char *argv[] ) {
+int32_t main( int32_t argc, char *argv[] ) {
 
-	/////////////////////////////////////////////////////////////
-	// CONFIGURACION SOCKET Y PUERTO DE CLIENTE
-	/////////////////////////////////////////////////////////////
-
-	uint32_t puerto;
-	struct sockaddr_in serv_addr;
-	struct hostent *server;
-	uint32_t terminar = 0;
-
+	// chequeo de argumentos
 	if ( argc < 3 ) {
-		fprintf( stderr, "Uso %s host puerto\n", argv[0]);
+		fprintf( stderr, "Uso %s <host> <puerto>\n", argv[0]);
 		exit( 0 );
 	}
 
+	// configuracion de puerto y server
 	puerto = atoi( argv[2] );
-	sockfd = socket( AF_INET, SOCK_STREAM, 0 );
-
 	server = gethostbyname( argv[1] );
+
+	// configuracion de socket
+	configurar_socket();
+
+	// activar handler para SIGINT
+ 	signal(SIGINT, (void*)salida);
+
+	// intento de logueo
+	while(1) {
+		logueo_response = logueo();
+
+		if(logueo_response == 0)
+			printf("\nLogin fallido, vuelva a intentar\n\n");
+		else if(logueo_response == 1) {
+			printf("\nConectado\n\n");
+			break;
+		}
+		else if(logueo_response == 9) {
+			printf("\nUsuario bloqueado\n\n");
+			salida(0);
+		}
+	}
+
+	while(1) {
+
+		terminar = 0;
+
+		// enviar comandos a server
+		escribir_a_servidor(1);
+
+		// chequeo si el mensaje recibido no es nulo
+		if(buffer[0] != '\0') {
+
+			// chequeo si el cliente quiere salir
+			if(fin(buffer))
+				terminar = 1;
+
+			// recibo contestacion de servidor
+			recepcion();
+
+			if(terminar == 0)
+				printf("%s\n", buffer);
+			else
+				salida(0);
+		}
+	}
+	exit(0);
+}
+
+/**
+ * Levantamiento de socket
+ */
+void configurar_socket() {
+	sockfd = socket( AF_INET, SOCK_STREAM, 0 );
 
 	memset( (char *) &serv_addr, '0', sizeof(serv_addr) );
 	serv_addr.sin_family = AF_INET;
@@ -32,61 +79,14 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 		perror( "CLIENTE: Error: conexion" );
 		exit( 1 );
 	}
-
-	/////////////////////////////////////////////////////////////
-	// INTENTO DE LOGUEO
-	/////////////////////////////////////////////////////////////
-
-	uint32_t log;
-	while(1) {
-		log = logueo();
-
-		if(log == 0) {
-			printf("\nLogin fallido, vuelva a intentar\n\n");
-		}
-		else if(log == 1) {
-			printf("\nConectado\n\n");
-			break;
-		}
-		else if(log == 9) {
-			printf("\nUsuario bloqueado\n\n");
-			log = 0;
-			break;
-		}
-	}
-
-	if(log != 1)
-		return 0;
-
-	while(1) {
-
-		/////////////////////////////////////////////////////////////
-		// ENVIO Y RECEPCION DE MENSAJES A SERVIDOR
-		/////////////////////////////////////////////////////////////
-
-		escribir_a_servidor(1);
-
-		if(buffer[0] != '\0') {
-			if(fin(buffer))
-				terminar = 1;
-
-			recepcion();
-
-			if(terminar == 0)
-				printf("%s\n", buffer);
-			else
-				exit(0);
-		}
-	}
-	return 0;
 }
 
 /**
- * Recibe datos y los guarda en buffer
+ * Rececpion de datos y guardado en buffer
  */
 void recepcion() {
-	memset( buffer, 0, TAM );
-	n = recv( sockfd, buffer, TAM, 0 );
+	memset( buffer, 0, BUFFER_SIZE );
+	n = recv( sockfd, buffer, BUFFER_SIZE, 0 );
 	if ( n < 0 ) {
 	  perror( "CLIENTE: Error: lectura de socket" );
 	  exit(1);
@@ -97,16 +97,16 @@ void recepcion() {
  * Envio de mensaje a servidor mediante input
  * Si simbolo == 1, se muestra un '>' para escribir
  */
-void escribir_a_servidor(uint32_t simbolo) {
-	uint32_t salir = 0;
+void escribir_a_servidor(int32_t simbolo) {
+	int32_t salir = 0;
 
 	while(salir == 0) {
-		memset( buffer, '\0', TAM );
+		memset( buffer, '\0', BUFFER_SIZE );
 
 		if(simbolo == 1)
 			printf( "> " );
 
-		fgets( buffer, TAM-1, stdin );
+		fgets( buffer, BUFFER_SIZE-1, stdin );
 
 		if(buffer[0] != 10) {
 			n = send( sockfd, buffer, strlen(buffer), 0 );
@@ -137,41 +137,30 @@ void enviar_a_servidor(char* mensaje) {
  *					1 para login exitoso
  *					9 para usuario bloqueado
  */
-uint32_t logueo() {
+int32_t logueo() {
 	char usuario[USUARIO_NOMBRE_SIZE];
 	char clave[USUARIO_CLAVE_SIZE];
-	char login[strlen(usuario) + strlen(clave) + 2];
 
 	printf("Usuario: ");
-	fgets( usuario, TAM-1, stdin );
+	fgets( usuario, BUFFER_SIZE, stdin );
+	usuario[strlen(usuario) - 1] = '\0';
 	printf("Clave: ");
-	fgets( clave, TAM-1, stdin );
+	fgets( clave, BUFFER_SIZE, stdin );
+	clave[strlen(clave) - 1] = '\0';
 
 	// formato de login: "usuario-clave"
-	uint32_t i = 0;
-	for(; i < strlen(usuario); i++) {
-		if(usuario[i] == 10) {
-			login[i] = '-';
-			i++;
-			break;
-		}
-		else
-			login[i] = usuario[i];
-	}
-	for(uint32_t j = 0; j < strlen(clave); j++) {
-		if(clave[j] == 10) {
-			login[i] = '\0';
-			break;
-		}
-		else {
-			login[i] = clave[j];
-			i++;
-		}
-	}
-	// fin formato de login
+	char* sep = "-";
+	char login[strlen(usuario) + strlen(clave) + strlen(sep)];
+	strcpy(login, "\0");
+	strcat(login, usuario);
+	strcat(login, sep);
+	strcat(login, clave);
 
-	enviar_a_servidor(login); // envio de credenciales a servidor
-	recepcion();	// respuesta del servidor
+	// envio de credenciales a servidor
+	enviar_a_servidor(login);
+
+	// respuesta del servidor
+	recepcion();
 
 	if( buffer[0] == '1' )
 		return 1;
@@ -184,7 +173,7 @@ uint32_t logueo() {
 /**
  * Verifica si se termina la comunicacion
  */
-uint32_t fin(char buf[TAM]) {
+int32_t fin(char buf[BUFFER_SIZE]) {
 	buf[strlen(buf)-1] = '\0';
 	if( !strcmp( "exit", buf )) {
 		return 1;
@@ -192,4 +181,14 @@ uint32_t fin(char buf[TAM]) {
 	else {
 		return 0;
 	}
+}
+
+/**
+ * Handler de salida del cliente
+ */
+void salida(int32_t sig) {
+	printf("Saliendo...\n");
+	fflush(stdout);
+	enviar_a_servidor("exit");
+	exit(0);
 }

@@ -1,52 +1,38 @@
 #include "../include/primary_server.h"
 
-uint32_t newsockfd, n, qid;
+int32_t newsockfd, n, qid, sockfd, puerto, pid;
+uint32_t clilen;
+struct sockaddr_in serv_addr, cli_addr;
+char buffer[BUFFER_SIZE];
 
-char buffer[TAM];
+/**
+ * Funcion main
+ */
+int32_t main( int32_t argc, char *argv[] ) {
 
-uint32_t main( uint32_t argc, char *argv[] ) {
-
-	/////////////////////////////////////////////////////////////
-	// CONFIGURACION SOCKET Y PUERTO DE SERVER
-	/////////////////////////////////////////////////////////////
-
-	uint32_t sockfd, puerto, clilen, pid;
-	struct sockaddr_in serv_addr, cli_addr;
-
+	// chequeo de argumentos
 	if ( argc < 2 ) {
         	fprintf( stderr, "Uso: %s <puerto>\n", argv[0] );
 		exit( 1 );
 	}
 
-	sockfd = socket( AF_INET, SOCK_STREAM, 0);
-	memset( (char *) &serv_addr, 0, sizeof(serv_addr) );
+	// definicion de puerto
 	puerto = atoi( argv[1] );
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-	serv_addr.sin_port = htons( puerto );
-	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
-		perror( "primary_server: Error" );
-		exit( 1 );
-	}
-	else {
-		printf("primary_server: Iniciando\n");
-		printf("primary_server: Proceso: %d - Puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
-	}
 
+	// levantamiento de socket
+	configurar_socket();
+
+	// creacion de cola
 	qid = get_cola('p');
 	if(qid == -1) {
 		perror("primary_server - creando cola: ");
 		exit(1);
 	}
-	printf("primary_server: cola = %d\n", qid);
+	printf("primary_server: Cola = %d\n", qid);
 
+	// empezar a escuchar 
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
-
-	/////////////////////////////////////////////////////////////
-	// ESPERAR CLIENTES NUEVOS
-	/////////////////////////////////////////////////////////////
-
 	while(1) {
 		newsockfd = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
 
@@ -56,13 +42,16 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 			// proceso hijo que atiende a cliente
 
 		    close( sockfd );
-				uint32_t intentos = 0;
-				uint32_t log;
+				int32_t intentos = 0;
+				int32_t log;
 				char* user_logueado;
 
 				while(1) {
 
 					recepcion();		// recepcion de credenciales por parte de cliente
+
+					if( strcmp(buffer, "exit") == 0 )
+						exit_command( "no-user" );
 
 					enviar_a_cola_local((long) LOGIN_REQUEST, buffer, 'a'); // reenvio a auth_service
 
@@ -115,15 +104,35 @@ uint32_t main( uint32_t argc, char *argv[] ) {
 			close( newsockfd );
 		}
 	}
-	return 0;
+	exit(0);
+}
+
+/**
+ * Levantamiento de socket
+ */
+void configurar_socket() {
+	sockfd = socket( AF_INET, SOCK_STREAM, 0);
+	memset( (char *) &serv_addr, 0, sizeof(serv_addr) );
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
+	serv_addr.sin_port = htons( puerto );
+	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
+		perror( "primary_server: Error" );
+		exit( 1 );
+	}
+	else {
+		printf("primary_server: Iniciando\n");
+		printf("primary_server: Proceso: %d - Puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
+	}
 }
 
 /**
  * Recibe datos y los guarda en buffer
  */
 void recepcion() {
-	memset( buffer, 0, TAM );
-	n = recv( newsockfd, buffer, TAM, 0 );
+	memset( buffer, 0, BUFFER_SIZE );
+	n = recv( newsockfd, buffer, BUFFER_SIZE, 0 );
 	if ( n < 0 ) {
 	  perror( "primary_server: Error: lectura de socket" );
 	  exit(1);
@@ -133,7 +142,7 @@ void recepcion() {
 /**
  * Envia datos por el socket
  */
-void enviar_a_socket(uint32_t socket, char* mensaje) {
+void enviar_a_socket(int32_t socket, char* mensaje) {
 	n = send( socket, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
 	  perror( "primary_server: Error: envio a socket\n");
@@ -157,7 +166,7 @@ void parse(char* usuario_logueado) {
 	buffer[strlen(buffer)-1] = '\0';
 
 	char *mensaje, *comando, *opcion, *argumento;
-	uint32_t i = 0;
+	int32_t i = 0;
 
 	mensaje = strtok(buffer, " ");
 	opcion = " ";
@@ -216,8 +225,8 @@ void user_ls() {
 
 	char* respuesta = recibir_de_cola(NOMBRES_RESPONSE, 'p').mtext; // respuesta de auth_service
 
-	char* aux = "-- Usuarios --\n";
-	uint32_t size = strlen(aux) + strlen(respuesta);
+	char* aux = "[Usuario] --> [Ultima conexion]\n";
+	int32_t size = strlen(aux) + strlen(respuesta);
 
 	char* tmp = malloc(size);
 	strcat(tmp, aux);

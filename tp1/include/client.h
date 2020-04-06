@@ -1,7 +1,9 @@
 #include "utilities.h"
 
 void recepcion();
-void escribir_a_servidor(uint32_t);
+void escribir_a_servidor(int32_t);
 void enviar_a_servidor(char*);
-uint32_t logueo();
-uint32_t fin(char[TAM]);
+void salida(int32_t);
+void configurar_socket();
+int32_t logueo();
+int32_t fin(char[BUFFER_SIZE]);
