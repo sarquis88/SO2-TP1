@@ -21,7 +21,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 	configurar_socket();
 
 	// activar handler para SIGINT
- 	signal(SIGINT, (void*)salida);
+ 	signal(SIGINT, salida);
 
 	// intento de logueo
 	while(1) {
@@ -187,8 +187,10 @@ int32_t fin(char buf[BUFFER_SIZE]) {
  * Handler de salida del cliente
  */
 void salida(int32_t sig) {
-	printf("Saliendo...\n");
-	fflush(stdout);
-	enviar_a_servidor("exit");
+	if(!sig) {
+		printf("Saliendo...\n");
+		fflush(stdout);
+		enviar_a_servidor("exit");
+	}
 	exit(0);
 }
