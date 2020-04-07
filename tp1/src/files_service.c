@@ -4,6 +4,7 @@
 int32_t qid, sockfd, servlen;
 struct sockaddr_un serv_addr;
 Archivo* archivos[CANT_ARCHIVOS];
+char impresion[BUFFER_SIZE];
 
 /**
  * Funcion main
@@ -15,18 +16,20 @@ int32_t main() {
 
 	// levantar base de datos
 	if(conectar()) {
-		perror("	FILES_SERVICE: error leyendo archivos: ");
+		sprintf(impresion, "error leyendo archivos\n");
+		imprimir(1);
 		exit(1);
 	}
 
 	// creacion de cola
 	qid = get_cola('f');
 	if(qid == -1) {
-		perror("	FILES_SERVICE: error creando cola: ");
+		sprintf(impresion, "error creando cola\n");
+		imprimir(1);
 		exit(1);
 	}
-	printf("	FILES_SERVICE: cola = %d\n", qid);
-	fflush(stdout);
+	sprintf(impresion, "cola = %d\n", qid);
+	imprimir(0);
 
 	// empezar a escuchar mensajes en cola y por socket
   listen( sockfd, 5 );
@@ -37,8 +40,8 @@ int32_t main() {
 
     // handler para archivos request
 		if(mensaje_str.mtype == ARCHIVOS_REQUEST) {
-      printf("	FILES_SERVICE: archivos request\n");
-			fflush(stdout);
+			sprintf(impresion, "archivos request\n");
+			imprimir(0);
 
       char* primero = "\n[Indice] - [Nombre de archivos] - [Formato]\n";
       int32_t size = strlen(primero);
@@ -64,8 +67,8 @@ int32_t main() {
       }
 
 			enviar_a_cola_local((long) ARCHIVOS_RESPONSE, files, 'p');
-			printf("	FILES_SERVICE: archivos response\n");
-			fflush(stdout);
+			sprintf(impresion, "archivos response\n");
+			imprimir(0);
 		}
 	}
 	exit(0);
@@ -77,7 +80,8 @@ int32_t main() {
 void configurar_socket() {
 	// creacion de socket
 	if ( ( sockfd = socket( AF_UNIX, SOCK_STREAM, 0) ) < 0 ) {
-    perror( "	FILES_SERVICE: error creando socket: ");
+		sprintf(impresion, "error creando socket\n");
+		imprimir(1);
     exit(1);
   }
 
@@ -92,13 +96,15 @@ void configurar_socket() {
 
 	// conexion de socket
   if( bind( sockfd,(struct sockaddr *)&serv_addr,servlen )<0 ) {
-    perror( "	FILES_SERVICE: error conectando socket: " );
+		sprintf(impresion, "error conectando socket\n");
+		imprimir(1);
     exit(1);
   }
 	else {
-		printf("	FILES_SERVICE: iniciando\n");
-		printf("	FILES_SERVICE: proceso: %d - socket: %s\n", getpid(), serv_addr.sun_path);
-		fflush(stdout);
+		sprintf(impresion, "iniciando\n");
+		imprimir(0);
+		sprintf(impresion, "proceso: %d - socket: %s\n", getpid(), serv_addr.sun_path);
+		imprimir(0);
 	}
 }
 
@@ -128,7 +134,8 @@ int32_t conectar() {
     closedir (dir);
   }
   else {
-    perror (" FILES_SERVICE: error creando archivos: ");
+		sprintf(impresion, "error creando archivos\n");
+		imprimir(1);
     return EXIT_FAILURE;
   }
 	return 0;
@@ -139,7 +146,22 @@ int32_t conectar() {
  */
 void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 	if(enviar_a_cola(id, mensaje, proceso) == -1) {
-		perror("	FILES_SERVICE: error enviando mensaje: ");
+		sprintf(impresion, "error enviando mensaje\n");
+		imprimir(1);
 		exit(1);
 	}
+}
+
+/**
+ * Imprimir en consola
+ */
+void imprimir(int32_t error) {
+		if(error) {
+			fprintf(stderr, "		FILES_SERVICE: %s", impresion );
+		}
+		else {
+			printf("		FILES_SERVICE: %s", impresion);
+		}
+		fflush(stdout);
+		strcpy(impresion, "\0");
 }

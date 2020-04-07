@@ -26,13 +26,13 @@ int32_t main( int32_t argc, char *argv[] ) {
 	// creacion de cola
 	qid = get_cola('p');
 	if(qid == -1) {
-		sprintf(impresion, "error creando cola");
+		sprintf(impresion, "error creando cola\n");
 		imprimir(1);
 		exit(1);
 	}
 
 	sprintf(impresion, "cola = %d\n", qid);
-	imprimir();
+	imprimir(0);
 
 	// empezar a escuchar
 	listen( sockfd, 5 );
@@ -66,7 +66,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 						if(intentos >= LIMITE_INTENTOS) {
 							char* nombre = strtok(buffer, "-");
 							sprintf(impresion, "usuario bloqueado: %s\n", nombre);
-							imprimir();
+							imprimir(0);
 							enviar_a_cola_local((long) BLOQUEAR_USUARIO, nombre, 'a');
 							enviar_a_cliente("9");
 							intentos = 0;
@@ -75,7 +75,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 						else {
 							char* nombre = strtok(buffer, "-");
 							sprintf(impresion, "intento de logueo fallido: %s\n", nombre);
-							imprimir();
+							imprimir(0);
 							enviar_a_cliente("0");
 						}
 					}
@@ -83,7 +83,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 						user_logueado = malloc(strlen(strtok(buffer, "-")));
 						strcpy(user_logueado, strtok(buffer, "-"));
 						sprintf(impresion, "nuevo cliente: %s\n", user_logueado);
-						imprimir();
+						imprimir(0);
 						enviar_a_cliente("1");
 						intentos = 0;
 						log = 1;
@@ -92,7 +92,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 					else if(respuesta[0] == '9') {
 						char* nombre = strtok(buffer, "-");
 						sprintf(impresion, "usuario bloqueado: %s\n", nombre);
-						imprimir();
+						imprimir(0);
 						enviar_a_cliente("9");
 						intentos = 0;
 						exit(0);
@@ -109,7 +109,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 		else {
 			// proceso original del servidor
 			sprintf(impresion, "autenticando\n");
-			imprimir();
+			imprimir(0);
 			close( newsockfd );
 		}
 	}
@@ -127,15 +127,15 @@ void configurar_socket() {
 	serv_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
 	serv_addr.sin_port = htons( puerto );
 	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
-		sprintf(impresion, "error conectando socket");
+		sprintf(impresion, "error conectando socket\n");
 		imprimir(1);
 		exit(1);
 	}
 	else {
 		sprintf(impresion, "iniciando\n");
-		imprimir();
+		imprimir(0);
 		sprintf(impresion, "proceso: %d - puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
-		imprimir();
+		imprimir(0);
 	}
 }
 
@@ -146,7 +146,7 @@ void recepcion() {
 	memset( buffer, 0, BUFFER_SIZE );
 	n = recv( newsockfd, buffer, BUFFER_SIZE, 0 );
 	if ( n < 0 ) {
-		sprintf(impresion, "error leyendo de socket");
+		sprintf(impresion, "error leyendo de socket\n");
 	  imprimir(1);
 	  exit(1);
 	}
@@ -158,7 +158,7 @@ void recepcion() {
 void enviar_a_socket(int32_t socket, char* mensaje) {
 	n = send( socket, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
-		sprintf(impresion, "error enviando a socket");
+		sprintf(impresion, "error enviando a socket\n");
 	  imprimir(1);
 	  exit( 1 );
 	}
@@ -203,7 +203,7 @@ void parse(char* usuario_logueado) {
 	}
 
 	sprintf(impresion, "%s - %s %s %s\n", usuario_logueado, comando, opcion, argumento);
-	imprimir();
+	imprimir(0);
 
 	if( strcmp("exit", comando) == 0 )
 		exit_command(usuario_logueado);
@@ -291,7 +291,7 @@ void file_ls() {
  */
 void exit_command(char* usuario) {
 	sprintf(impresion, "%s ha salido\n", usuario);
-	imprimir();
+	imprimir(0);
 	exit(0);
 }
 
@@ -311,7 +311,7 @@ void unknown_command() {
  */
 void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 	if(enviar_a_cola(id, mensaje, proceso) == -1) {
-		sprintf(impresion, "error enviando mensaje");
+		sprintf(impresion, "error enviando mensaje\n");
 		imprimir(1);
 		exit(1);
 	}
@@ -328,4 +328,5 @@ void imprimir(int32_t error) {
 			printf("PRIMARY_SERVER: %s", impresion);
 		}
 		fflush(stdout);
+		strcpy(impresion, "\0");
 }

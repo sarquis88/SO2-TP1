@@ -14,8 +14,8 @@ int32_t main( int32_t argc, char *argv[] ) {
 
   pid = fork();
   if ( pid == 0 ) {
-    if( execv(PATH_PRIMARY_SERVER,  argv) == -1 ) {
-      perror("launch: primary_server: ");
+    if( execv(PATH_AUTH_SERVICE,  argv) == -1 ) {
+      perror("launch: auth_service: ");
       error = 1;
       exit(1);
     }
@@ -27,8 +27,8 @@ int32_t main( int32_t argc, char *argv[] ) {
 
   pid = fork();
   if ( pid == 0 ) {
-    if( execv(PATH_AUTH_SERVICE,  argv) == -1 ) {
-      perror("launch: auth_service: ");
+    if( execv(PATH_FILES_SERVICE,  argv) == -1 ) {
+      perror("launch: files_service: ");
       exit(1);
     }
     exit(0);
@@ -37,8 +37,8 @@ int32_t main( int32_t argc, char *argv[] ) {
   if(error == 1)
     exit(1);
 
-  if( execv(PATH_FILES_SERVICE,  argv) == -1 ) {
-    perror("launch: files_service: ");
+  if( execv(PATH_PRIMARY_SERVER,  argv) == -1 ) {
+    perror("launch: primary_server: ");
     exit(1);
   }
 }

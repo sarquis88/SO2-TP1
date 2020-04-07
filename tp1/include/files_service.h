@@ -6,6 +6,7 @@
 int32_t conectar();
 void enviar_a_cola_local(long, char*, char);
 void configurar_socket();
+void imprimir(int32_t);
 
 typedef struct {
   int32_t index;

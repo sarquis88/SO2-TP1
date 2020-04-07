@@ -4,6 +4,7 @@
 int32_t qid, sockfd, servlen;
 struct sockaddr_un serv_addr;
 Usuario* usuarios[CANT_USUARIOS];
+char impresion[BUFFER_SIZE];
 
 /**
  * Funcion main
@@ -15,18 +16,20 @@ int32_t main() {
 
 	// levantar base de datos
 	if(conectar()) {
-		perror("	AUTH_SERVICE: error leyendo base de datos: ");
+		sprintf(impresion, "error leyendo base de datos\n");
+		imprimir(1);
 		exit(1);
 	}
 
 	// creacion de cola
 	qid = get_cola('a');
 	if(qid == -1) {
-		perror("	AUTH_SERVICE: error creando cola: ");
+		sprintf(impresion, "error creando la cola\n");
+		imprimir(1);
 		exit(1);
 	}
-	printf("	AUTH_SERVICE: cola = %d\n", qid);
-	fflush(stdout);
+	sprintf(impresion, "cola = %d\n", qid);
+	imprimir(0);
 
 	// empezar a escuchar mensajes en cola y por socket
   listen( sockfd, 5 );
@@ -37,8 +40,8 @@ int32_t main() {
 
 		// handler para login request
 		if(mensaje_str.mtype == LOGIN_REQUEST) {
-			printf("	AUTH_SERVICE: login request: %s\n", mensaje_str.mtext);
-			fflush(stdout);
+			sprintf(impresion, "login request: %s\n", mensaje_str.mtext);
+			imprimir(0);
 			int32_t log = login(mensaje_str.mtext);
 
 			char rta[2];
@@ -50,22 +53,23 @@ int32_t main() {
 				strcpy(rta, "9");
 
 			enviar_a_cola_local((long) LOGIN_RESPONSE, rta, 'p');
-			printf("	AUTH_SERVICE: login response (rta: %s)\n", rta);
-			fflush(stdout);
+			sprintf(impresion, "login response (rta: %s)\n", rta);
+			imprimir(0);
 		}
 		// handler para bloquear usuario
 		else if(mensaje_str.mtype == BLOQUEAR_USUARIO) {
-			printf("	AUTH_SERVICE: bloquear usuario: %s\n", mensaje_str.mtext);
-			fflush(stdout);
+			sprintf(impresion, "bloquear usuario: %s\n", mensaje_str.mtext);
+			imprimir(0);
 			if(bloquear_usuario(mensaje_str.mtext) == -1) {
-					perror("	AUTH_SERVICE: error bloquendo usuario: ");
-					exit(1);
+				sprintf(impresion, "error bloqueando usuario\n");
+				imprimir(1);
+				exit(1);
 			}
 		}
 		// handler para nombre request
-		else if(mensaje_str.mtype == NOMBRES_REQUEST) {
-			printf("	AUTH_SERVICE: nombres request\n");
-			fflush(stdout);
+		else if(mensaje_str.mtype == NOMBRES_REQUEST) {	
+			sprintf(impresion, "nombres request\n");
+			imprimir(0);
 
 			char* primero = "\n[Usuario] - [Ultima conexion]\n";
 			int32_t size = strlen(primero);
@@ -85,18 +89,18 @@ int32_t main() {
 				strcat(users_info, salto);
 			}
 			enviar_a_cola_local((long) NOMBRES_RESPONSE, users_info, 'p');
-			printf("	AUTH_SERVICE: nombres response\n");
-			fflush(stdout);
+			sprintf(impresion, "nombres response\n");
+			imprimir(0);
 		}
 		// handler para cambiar contraseña request
 		else if(mensaje_str.mtype == CAMBIAR_CLAVE_REQUEST) {
-			printf("	AUTH_SERVICE: cambiar clave request\n");
-			fflush(stdout);
+			sprintf(impresion, "cambiar clave request\n");
+			imprimir(0);
 
 			cambiar_clave(mensaje_str.mtext);
 			enviar_a_cola_local((long) CAMBIAR_CLAVE_RESPONSE, "n", 'p');
-			printf("	AUTH_SERVICE: cambiar clave response\n");
-			fflush(stdout);
+			sprintf(impresion, "cambiar clave response\n");
+			imprimir(0);
 		}
 	}
 	exit(0);
@@ -108,7 +112,8 @@ int32_t main() {
 void configurar_socket() {
 	// creacion de socket
 	if ( ( sockfd = socket( AF_UNIX, SOCK_STREAM, 0) ) < 0 ) {
-    perror( "Creación de  socket");
+		sprintf(impresion, "error creando socket\n");
+		imprimir(1);
     exit(1);
   }
 
@@ -123,13 +128,15 @@ void configurar_socket() {
 
 	// conexion de socket
   if( bind( sockfd,(struct sockaddr *)&serv_addr,servlen )<0 ) {
-    perror( "	AUTH_SERVICE: ligadura" );
+		sprintf(impresion, "error ligadura\n");
+    imprimir(1);
     exit(1);
   }
 	else {
-		printf("	AUTH_SERVICE: iniciando\n");
-		printf("	AUTH_SERVICE: proceso: %d - socket: %s\n", getpid(), serv_addr.sun_path);
-		fflush(stdout);
+		sprintf(impresion, "iniciando\n");
+		imprimir(0);
+		sprintf(impresion, "proceso: %d - socket: %s\n", getpid(), serv_addr.sun_path);
+		imprimir(0);
 	}
 }
 
@@ -298,7 +305,22 @@ int32_t refresh_datos() {
  */
 void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 	if(enviar_a_cola(id, mensaje, proceso) == -1) {
-		perror("auth_service - enviando mensaje: ");
+		sprintf(impresion, "error enviando mensaje\n");
+		imprimir(1);
 		exit(1);
 	}
+}
+
+/**
+ * Imprimir en consola
+ */
+void imprimir(int32_t error) {
+		if(error) {
+			fprintf(stderr, "	AUTH_SERVICE: %s", impresion );
+		}
+		else {
+			printf("	AUTH_SERVICE: %s", impresion);
+		}
+		fflush(stdout);
+		strcpy(impresion, "\0");
 }
