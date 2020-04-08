@@ -1,15 +1,26 @@
 #include "../include/files_service.h"
 
 // definicion de variables
-int32_t qid, sockfd, servlen;
-struct sockaddr_un serv_addr;
+int32_t newsockfd, n, qid, sockfd, pid, puerto, qid;
+uint32_t clilen;
+struct sockaddr_in serv_addr, cli_addr;
 Archivo* archivos[CANT_ARCHIVOS];
-char impresion[BUFFER_SIZE];
+char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE];
 
 /**
  * Funcion main
  */
-int32_t main() {
+int32_t main( int32_t argc, char *argv[] ) {
+
+	// chequeo de argumentos
+	if ( argc < 2 ) {
+		sprintf(impresion, "Uso: %s <puerto>\n", argv[0]);
+    imprimir(1);
+		exit(1);
+	}
+
+	// definicion de puerto
+	puerto = atoi( argv[1] ) + 1;
 
 	// configuracion de socket
 	configurar_socket();
@@ -32,7 +43,8 @@ int32_t main() {
 	imprimir(0);
 
 	// empezar a escuchar mensajes en cola y por socket
-  listen( sockfd, 5 );
+	listen( sockfd, 5 );
+	clilen = sizeof( cli_addr );
   while(1) {
 
 		// recibir cualquier tipo de mensajes
@@ -70,6 +82,48 @@ int32_t main() {
 			sprintf(impresion, "archivos response\n");
 			imprimir(0);
 		}
+
+		// handler para descarga request
+		if(mensaje_str.mtype == DESCARGA_REQUEST) {
+			sprintf(impresion, "descarga request\n");
+			imprimir(0);
+
+			int32_t index_descarga = atoi(mensaje_str.mtext);
+			int32_t flag = 0;
+			for(int32_t i = 0; i < CANT_ARCHIVOS; i++) {
+				if(archivos[i]->index == index_descarga) {
+					flag = 1;
+					break;
+				}
+			}
+
+			sprintf(impresion, "descarga response\n");
+			imprimir(0);
+
+			if(flag == 0)
+				enviar_a_cola_local((long) DESCARGA_RESPONSE, "descarga_no", 'p');
+			else {
+				enviar_a_cola_local((long) DESCARGA_RESPONSE, "descarga_si", 'p');
+
+				// empezar a escuchar
+				newsockfd = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
+				pid = fork();
+
+				// proceso hijo que atiende a cliente
+				if ( pid == 0 ) {
+					close( sockfd );
+
+					enviar_archivo(index_descarga);
+
+					exit(0);
+				}
+				else {
+					sprintf(impresion, "enviando archivo\n");
+					imprimir(0);
+					close( newsockfd );
+				}
+			}
+		}
 	}
 	exit(0);
 }
@@ -78,32 +132,21 @@ int32_t main() {
  * Levantamiento de socket
  */
 void configurar_socket() {
-	// creacion de socket
-	if ( ( sockfd = socket( AF_UNIX, SOCK_STREAM, 0) ) < 0 ) {
-		sprintf(impresion, "error creando socket\n");
-		imprimir(1);
-    exit(1);
-  }
+	sockfd = socket( AF_INET, SOCK_STREAM, 0);
+	memset( (char *) &serv_addr, 0, sizeof(serv_addr) );
 
-	// Remover el nombre de archivo si existe
-	unlink ( SOCKET_PATH );
-
-	// configuracion de socket
-	memset( &serv_addr, 0, sizeof(serv_addr) );
-  serv_addr.sun_family = AF_UNIX;
-  strcpy( serv_addr.sun_path, SOCKET_PATH );
-  servlen = strlen(serv_addr.sun_path) + sizeof(serv_addr.sun_family);
-
-	// conexion de socket
-  if( bind( sockfd,(struct sockaddr *)&serv_addr,servlen )<0 ) {
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
+	serv_addr.sin_port = htons( puerto );
+	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
 		sprintf(impresion, "error conectando socket\n");
 		imprimir(1);
-    exit(1);
-  }
+		exit(1);
+	}
 	else {
 		sprintf(impresion, "iniciando\n");
 		imprimir(0);
-		sprintf(impresion, "proceso: %d - socket: %s\n", getpid(), serv_addr.sun_path);
+		sprintf(impresion, "proceso: %d - puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
 		imprimir(0);
 	}
 }
@@ -156,12 +199,78 @@ void enviar_a_cola_local(long id, char* mensaje, char proceso) {
  * Imprimir en consola
  */
 void imprimir(int32_t error) {
-		if(error) {
-			fprintf(stderr, "		FILES_SERVICE: %s", impresion );
-		}
-		else {
-			printf("		FILES_SERVICE: %s", impresion);
-		}
+		printf("\33[1;32m");
+		if(error)
+			fprintf(stderr, "FILES_SERVICE: %s", impresion );
+		else
+			printf("FILES_SERVICE: %s", impresion);
 		fflush(stdout);
+		printf("\033[0m");
 		strcpy(impresion, "\0");
+}
+
+/**
+ * Recibe datos y los guarda en buffer
+ */
+void recepcion() {
+	memset( buffer, 0, BUFFER_SIZE );
+	n = recv( newsockfd, buffer, BUFFER_SIZE, 0 );
+	if ( n < 0 ) {
+		sprintf(impresion, "error leyendo de socket\n");
+	  imprimir(1);
+	  exit(1);
+	}
+}
+
+/**
+ * Envia datos por el socket
+ */
+void enviar_a_cliente(char* mensaje) {
+	n = send( newsockfd, mensaje, strlen(mensaje), 0 );
+	if ( n < 0 ) {
+		sprintf(impresion, "error enviando a cliente\n");
+	  imprimir(1);
+	  exit( 1 );
+	}
+}
+
+/**
+ * Enviar archivo a cliente
+ */
+void enviar_archivo(int32_t index_descarga) {
+
+	char* punto = ".";
+	char nombre_archivo[strlen(archivos[index_descarga]->nombre) + strlen(archivos[index_descarga]->formato)
+		+ strlen(punto)];
+	strcpy(nombre_archivo, "\0");
+	strcat(nombre_archivo, archivos[index_descarga]->nombre);
+	strcat(nombre_archivo, punto);
+	strcat(nombre_archivo, archivos[index_descarga]->formato);
+	nombre_archivo[strlen(nombre_archivo)] = '\0';
+
+	enviar_a_cliente(nombre_archivo);
+
+	char path_archivo[strlen(FILES_DIR_NAME) + strlen(nombre_archivo)];
+
+	strcpy(path_archivo, "\0");
+	strcat(path_archivo, FILES_DIR_NAME);
+	strcat(path_archivo, nombre_archivo);
+
+	FILE* file = fopen(path_archivo, "rb");	// rb para archivos de no-texto;
+
+	if ( file != NULL ) {
+		int32_t enviado = 0;
+		while( (n = fread(buffer, sizeof(char), sizeof(buffer), file)) > 0 ) {
+			send(newsockfd, buffer, sizeof(buffer), 0);
+			enviado = enviado + n;
+		}
+		enviado = (enviado * 8) / 1024; // 8: tamaño de char
+		sprintf(impresion, "enviado: %s \n", nombre_archivo);
+		imprimir(0);
+		fclose(file);
+	}
+	else {
+		sprintf(impresion, "error abriendo archivo\n");
+		imprimir(1);
+	}
 }

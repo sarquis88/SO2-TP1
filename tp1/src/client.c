@@ -1,24 +1,28 @@
 #include "../include/client.h"
 
 char buffer[BUFFER_SIZE];
-int32_t sockfd, n, puerto, terminar, logueo_response;
-struct sockaddr_in serv_addr;
-struct hostent *server;
+int32_t socket_primary, socket_file, n, puerto_primary, puerto_file, terminar, logueo_response;
+struct sockaddr_in serv_addr_primary;
+struct sockaddr_in serv_addr_file;
+struct hostent *server_primary;
+struct hostent *server_file;
 
 int32_t main( int32_t argc, char *argv[] ) {
 
 	// chequeo de argumentos
 	if ( argc < 3 ) {
-		fprintf( stderr, "Uso %s <host> <puerto>\n", argv[0]);
+		fprintf( stderr, "Uso %s <host> <puerto_primario>\n", argv[0]);
 		exit( 0 );
 	}
 
-	// configuracion de puerto y server
-	puerto = atoi( argv[2] );
-	server = gethostbyname( argv[1] );
+	// configuracion de puerto_primary y server
+	puerto_primary = atoi( argv[2] );
+	puerto_file = puerto_primary + 1;
+	server_primary = gethostbyname( argv[1] );
+	server_file = gethostbyname( argv[1] );
 
 	// configuracion de socket
-	configurar_socket();
+	conectar_a_primary();
 
 	// activar handler para SIGINT
  	signal(SIGINT, salida);
@@ -54,10 +58,16 @@ int32_t main( int32_t argc, char *argv[] ) {
 				terminar = 1;
 
 			// recibo contestacion de servidor
-			recepcion();
+			recepcion(socket_primary);
 
-			if(terminar == 0)
-				printf("%s\n", buffer);
+			if(terminar == 0) {
+				if( strcmp(buffer, "descarga_no") == 0)
+					printf("\nIndice de archivo no encontrado\n");
+				else if( strcmp(buffer, "descarga_si") == 0)
+					descargar();
+				else
+					printf("%s\n", buffer);
+			}
 			else
 				salida(0);
 		}
@@ -66,17 +76,33 @@ int32_t main( int32_t argc, char *argv[] ) {
 }
 
 /**
- * Levantamiento de socket
+ * Levantamiento de socket primario
  */
-void configurar_socket() {
-	sockfd = socket( AF_INET, SOCK_STREAM, 0 );
+void conectar_a_primary() {
+	socket_primary = socket( AF_INET, SOCK_STREAM, 0 );
+	memset( (char *) &serv_addr_primary, '0', sizeof(serv_addr_primary) );
+	serv_addr_primary.sin_family = AF_INET;
+	bcopy( (char *)server_primary->h_addr, (char *)&serv_addr_primary.sin_addr.s_addr, server_primary->h_length );
+	serv_addr_primary.sin_port = htons( puerto_primary );
 
-	memset( (char *) &serv_addr, '0', sizeof(serv_addr) );
-	serv_addr.sin_family = AF_INET;
-	bcopy( (char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length );
-	serv_addr.sin_port = htons( puerto );
-	if ( connect( sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr ) ) < 0 ) {
-		perror( "CLIENTE: Error: conexion" );
+	if ( connect( socket_primary, (struct sockaddr *)&serv_addr_primary, sizeof(serv_addr_primary ) ) < 0 ) {
+		perror( "CLIENTE: Error: conexion a primary" );
+		exit( 1 );
+	}
+}
+
+/**
+ * Levantamiento de socket file
+ */
+void conectar_a_file() {
+	socket_file = socket( AF_INET, SOCK_STREAM, 0 );
+	memset( (char *) &serv_addr_file, '0', sizeof(serv_addr_file) );
+	serv_addr_file.sin_family = AF_INET;
+	bcopy( (char *)server_file->h_addr, (char *)&serv_addr_file.sin_addr.s_addr, server_file->h_length );
+	serv_addr_file.sin_port = htons( puerto_file );
+
+	if ( connect( socket_file, (struct sockaddr *)&serv_addr_file, sizeof(serv_addr_file ) ) < 0 ) {
+		perror( "CLIENTE: Error: conexion a file" );
 		exit( 1 );
 	}
 }
@@ -84,9 +110,9 @@ void configurar_socket() {
 /**
  * Rececpion de datos y guardado en buffer
  */
-void recepcion() {
+void recepcion(int32_t socket) {
 	memset( buffer, 0, BUFFER_SIZE );
-	n = recv( sockfd, buffer, BUFFER_SIZE, 0 );
+	n = recv( socket, buffer, BUFFER_SIZE, 0 );
 	if ( n < 0 ) {
 	  perror( "CLIENTE: Error: lectura de socket" );
 	  exit(1);
@@ -109,7 +135,7 @@ void escribir_a_servidor(int32_t simbolo) {
 		fgets( buffer, BUFFER_SIZE-1, stdin );
 
 		if(buffer[0] != 10) {
-			n = send( sockfd, buffer, strlen(buffer), 0 );
+			n = send( socket_primary, buffer, strlen(buffer), 0 );
 			if ( n < 0 ) {
 			  perror( "CLIENTE: Error: envio a socket\n");
 			  exit( 1 );
@@ -123,8 +149,8 @@ void escribir_a_servidor(int32_t simbolo) {
 /**
  * Envio de mensaje a servidor
  */
-void enviar_a_servidor(char* mensaje) {
-	n = send( sockfd, mensaje, strlen(mensaje), 0 );
+void enviar_a_socket(int32_t socket, char* mensaje) {
+	n = send( socket, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
 	  perror( "CLIENTE: Error: envio a socket\n");
 	  exit( 1 );
@@ -157,10 +183,10 @@ int32_t logueo() {
 	strcat(login, clave);
 
 	// envio de credenciales a servidor
-	enviar_a_servidor(login);
+	enviar_a_socket(socket_primary, login);
 
 	// respuesta del servidor
-	recepcion();
+	recepcion(socket_primary);
 
 	if( buffer[0] == '1' )
 		return 1;
@@ -190,7 +216,48 @@ void salida(int32_t sig) {
 	if(!sig) {
 		printf("Saliendo...\n");
 		fflush(stdout);
-		enviar_a_servidor("exit");
+		enviar_a_socket(socket_primary, "exit");
 	}
 	exit(0);
+}
+
+/**
+ * Proceso de descarga de archivo
+ */
+void descargar() {
+
+	conectar_a_file();
+
+	// recibo nombre de archivo con formato
+	recepcion(socket_file);
+
+	char nombre_archivo[strlen(buffer)];
+	strcpy(nombre_archivo, buffer);
+
+	char file_path[strlen(PATH_DOWNLOADS_DIR) + strlen(nombre_archivo)];
+	strcpy(file_path, "\0");
+	strcat(file_path, PATH_DOWNLOADS_DIR);
+	strcat(file_path, nombre_archivo);
+	file_path[strlen(file_path)] = '\0';
+
+  FILE* file = fopen( file_path, "wb" );
+
+  if(file != NULL) {
+		printf("\nDescargando archivo: %s\n", file_path);
+		int32_t recibido = 0;
+    while( (n = recv(socket_file, buffer, sizeof(buffer), 0) ) > 0 ) {
+      fwrite(buffer, sizeof(char), n, file);
+			recibido = recibido + n;
+		}
+		recibido = recibido * 8; // 8: tamaño de char
+		printf("Descarga terminada\n");
+
+    fclose(file);
+  }
+	else {
+      perror("CLIENTE: error creando archivo de descarga\n");
+			exit(1);
+  }
+
+	close( socket_file );
 }

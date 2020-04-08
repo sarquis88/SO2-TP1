@@ -1,8 +1,7 @@
 #include "../include/auth_service.h"
 
 // definicion de variables
-int32_t qid, sockfd, servlen;
-struct sockaddr_un serv_addr;
+int32_t qid;
 Usuario* usuarios[CANT_USUARIOS];
 char impresion[BUFFER_SIZE];
 
@@ -11,8 +10,10 @@ char impresion[BUFFER_SIZE];
  */
 int32_t main() {
 
-	// configuracion de socket
-	configurar_socket();
+	sprintf(impresion, "iniciando\n");
+	imprimir(0);
+	sprintf(impresion, "proceso: %d\n", getpid());
+	imprimir(0);
 
 	// levantar base de datos
 	if(conectar()) {
@@ -31,8 +32,7 @@ int32_t main() {
 	sprintf(impresion, "cola = %d\n", qid);
 	imprimir(0);
 
-	// empezar a escuchar mensajes en cola y por socket
-  listen( sockfd, 5 );
+	// empezar a escuchar mensajes en cola
   while(1) {
 
 		// recibir cualquier tipo de mensajes
@@ -67,7 +67,7 @@ int32_t main() {
 			}
 		}
 		// handler para nombre request
-		else if(mensaje_str.mtype == NOMBRES_REQUEST) {	
+		else if(mensaje_str.mtype == NOMBRES_REQUEST) {
 			sprintf(impresion, "nombres request\n");
 			imprimir(0);
 
@@ -104,40 +104,6 @@ int32_t main() {
 		}
 	}
 	exit(0);
-}
-
-/**
- * Levantamiento de socket
- */
-void configurar_socket() {
-	// creacion de socket
-	if ( ( sockfd = socket( AF_UNIX, SOCK_STREAM, 0) ) < 0 ) {
-		sprintf(impresion, "error creando socket\n");
-		imprimir(1);
-    exit(1);
-  }
-
-	// Remover el nombre de archivo si existe
-	unlink ( SOCKET_PATH );
-
-	// configuracion de socket
-	memset( &serv_addr, 0, sizeof(serv_addr) );
-  serv_addr.sun_family = AF_UNIX;
-  strcpy( serv_addr.sun_path, SOCKET_PATH );
-  servlen = strlen(serv_addr.sun_path) + sizeof(serv_addr.sun_family);
-
-	// conexion de socket
-  if( bind( sockfd,(struct sockaddr *)&serv_addr,servlen )<0 ) {
-		sprintf(impresion, "error ligadura\n");
-    imprimir(1);
-    exit(1);
-  }
-	else {
-		sprintf(impresion, "iniciando\n");
-		imprimir(0);
-		sprintf(impresion, "proceso: %d - socket: %s\n", getpid(), serv_addr.sun_path);
-		imprimir(0);
-	}
 }
 
 /**
@@ -315,12 +281,12 @@ void enviar_a_cola_local(long id, char* mensaje, char proceso) {
  * Imprimir en consola
  */
 void imprimir(int32_t error) {
-		if(error) {
-			fprintf(stderr, "	AUTH_SERVICE: %s", impresion );
-		}
-		else {
-			printf("	AUTH_SERVICE: %s", impresion);
-		}
+		printf("\033[1;31m");
+		if(error)
+			fprintf(stderr, "AUTH_SERVICE: %s", impresion );
+		else
+			printf("AUTH_SERVICE: %s", impresion);
 		fflush(stdout);
+		printf("\033[0m");
 		strcpy(impresion, "\0");
 }

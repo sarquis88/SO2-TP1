@@ -10,7 +10,6 @@ int32_t set_ultima_conexion(char*);
 int32_t login(char*);
 int32_t refresh_datos();
 void enviar_a_cola_local(long, char*, char);
-void configurar_socket();
 void imprimir(int32_t);
 
 typedef struct {

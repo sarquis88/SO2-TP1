@@ -1,5 +1,6 @@
 #include "../include/primary_server.h"
 
+// definicion de variables
 int32_t newsockfd, n, qid, sockfd, pid, puerto;
 uint32_t clilen;
 struct sockaddr_in serv_addr, cli_addr;
@@ -155,20 +156,13 @@ void recepcion() {
 /**
  * Envia datos por el socket
  */
-void enviar_a_socket(int32_t socket, char* mensaje) {
-	n = send( socket, mensaje, strlen(mensaje), 0 );
+void enviar_a_cliente(char* mensaje) {
+	n = send( newsockfd, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
-		sprintf(impresion, "error enviando a socket\n");
+		sprintf(impresion, "error enviando a cliente\n");
 	  imprimir(1);
 	  exit( 1 );
 	}
-}
-
-/**
- * Envia datos por el socket hacia el cliente
- */
-void enviar_a_cliente(char* mensaje) {
-	enviar_a_socket(newsockfd, mensaje);
 }
 
 /**
@@ -269,7 +263,7 @@ void file_command(char *opcion, char *argumento) {
 	if( strcmp("ls", opcion) == 0 )
 		file_ls();
 	else if( strcmp("down", opcion) == 0 && strcmp(" ", argumento) != 0)
-		return;
+		file_down(argumento);
 	else {
 		enviar_a_cliente(	" \nUso: file [opcion] <argumento>\n\n"
 							"	- ls : listado de archivos\n"
@@ -282,7 +276,16 @@ void file_command(char *opcion, char *argumento) {
  */
 void file_ls() {
 	enviar_a_cola_local((long) ARCHIVOS_REQUEST, "n", 'f');
-	char* respuesta = recibir_de_cola(ARCHIVOS_RESPONSE, 'p').mtext; // respuesta de auth_service
+	char* respuesta = recibir_de_cola(ARCHIVOS_RESPONSE, 'p').mtext;
+	enviar_a_cliente(respuesta);
+}
+
+/**
+ * Reaccion al comando file down
+ */
+void file_down(char* archivo_index) {
+	enviar_a_cola_local((long) DESCARGA_REQUEST, archivo_index, 'f');
+	char* respuesta = recibir_de_cola(DESCARGA_RESPONSE, 'p').mtext;
 	enviar_a_cliente(respuesta);
 }
 
@@ -321,12 +324,12 @@ void enviar_a_cola_local(long id, char* mensaje, char proceso) {
  * Imprimir en consola
  */
 void imprimir(int32_t error) {
-		if(error) {
+		printf("\033[1;34m");
+		if(error)
 			fprintf(stderr, "PRIMARY_SERVER: %s", impresion );
-		}
-		else {
+		else
 			printf("PRIMARY_SERVER: %s", impresion);
-		}
 		fflush(stdout);
+		printf("\033[0m");
 		strcpy(impresion, "\0");
 }
