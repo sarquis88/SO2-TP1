@@ -60,3 +60,31 @@ struct msgbuf recibir_de_cola(long id_mensaje, char proceso) {
     return mensaje_str;
   }
 }
+
+/**
+ * Retona el hash md5 del archivo ingresado
+ */
+char* get_md5(char* file_path) {
+
+		FILE* file = fopen(file_path, "rb");	// rb para archivos de no-texto;
+    char* buffer[BUFFER_SIZE];
+    int32_t n;
+
+    unsigned char c[MD5_DIGEST_LENGTH];
+		MD5_CTX mdContext;
+
+    MD5_Init (&mdContext);
+		while (( n = fread (buffer, sizeof(char), sizeof(buffer), file) ) != 0)
+        MD5_Update (&mdContext, buffer, n);
+    MD5_Final (c,&mdContext);
+
+		fclose(file);
+
+    char* md5string = malloc(MD5_DIGEST_LENGTH * 2 + 1);
+    for (int32_t i = 0; i < MD5_DIGEST_LENGTH; ++i)
+      sprintf(&md5string[i * 2], "%02x", (unsigned int)c[i]);
+
+    md5string[strlen(md5string)] = '\0';
+
+		return md5string;
+}

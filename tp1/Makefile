@@ -1,5 +1,5 @@
 FLAGS=-Wall -Werror -pedantic -Wextra -Wconversion -g
-FLAGS=-Wall -Werror -pedantic -Wextra -g
+FLAGS=-Wall -Werror -pedantic -Wextra -lcrypto -g
 
 make:
 	gcc $(FLAGS) src/primary_server.c src/utilities.c -o bin/primary_server.o

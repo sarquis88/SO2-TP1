@@ -1,7 +1,7 @@
 #include "../include/primary_server.h"
 
 // definicion de variables
-int32_t newsockfd, n, qid, sockfd, pid, puerto;
+int32_t socket_cliente, n, qid, sockfd, pid, puerto, salida;
 uint32_t clilen;
 struct sockaddr_in serv_addr, cli_addr;
 char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE];
@@ -24,6 +24,11 @@ int32_t main( int32_t argc, char *argv[] ) {
 	// levantamiento de socket
 	configurar_socket();
 
+	sprintf(impresion, "iniciando\n");
+	imprimir(0);
+	sprintf(impresion, "proceso: %d - puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
+	imprimir(0);
+
 	// creacion de cola
 	qid = get_cola('p');
 	if(qid == -1) {
@@ -39,79 +44,75 @@ int32_t main( int32_t argc, char *argv[] ) {
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
 	while(1) {
-		newsockfd = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
+		socket_cliente = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
 
-		pid = fork();
+		int32_t intentos = 0;
+		salida = 0;
+		int32_t log;
+		char* user_logueado;
 
-		if ( pid == 0 ) {
-			// proceso hijo que atiende a cliente
+		sprintf(impresion, "autenticando\n");
+		imprimir(0);
 
-		    close( sockfd );
-				int32_t intentos = 0;
-				int32_t log;
-				char* user_logueado;
+		while(1) {
 
-				while(1) {
+			recepcion();		// recepcion de credenciales por parte de cliente
 
-					recepcion();		// recepcion de credenciales por parte de cliente
+			if( strcmp(buffer, "exit") == 0 ) {
+				exit_command( "no-user" );
+				break;
+			}
 
-					if( strcmp(buffer, "exit") == 0 )
-						exit_command( "no-user" );
+			enviar_a_cola_local((long) LOGIN_REQUEST, buffer, 'a'); // reenvio a auth_service
 
-					enviar_a_cola_local((long) LOGIN_REQUEST, buffer, 'a'); // reenvio a auth_service
+			char* respuesta = recibir_de_cola(LOGIN_RESPONSE, 'p').mtext; // respuesta de auth_service
 
-					char* respuesta = recibir_de_cola(LOGIN_RESPONSE, 'p').mtext; // respuesta de auth_service
-
-					if( respuesta[0] == '0') {
-						intentos++;
-						if(intentos >= LIMITE_INTENTOS) {
-							char* nombre = strtok(buffer, "-");
-							sprintf(impresion, "usuario bloqueado: %s\n", nombre);
-							imprimir(0);
-							enviar_a_cola_local((long) BLOQUEAR_USUARIO, nombre, 'a');
-							enviar_a_cliente("9");
-							intentos = 0;
-							exit(0);
-						}
-						else {
-							char* nombre = strtok(buffer, "-");
-							sprintf(impresion, "intento de logueo fallido: %s\n", nombre);
-							imprimir(0);
-							enviar_a_cliente("0");
-						}
-					}
-					else if(respuesta[0] == '1') {
-						user_logueado = malloc(strlen(strtok(buffer, "-")));
-						strcpy(user_logueado, strtok(buffer, "-"));
-						sprintf(impresion, "nuevo cliente: %s\n", user_logueado);
-						imprimir(0);
-						enviar_a_cliente("1");
-						intentos = 0;
-						log = 1;
-						break;
-					}
-					else if(respuesta[0] == '9') {
-						char* nombre = strtok(buffer, "-");
-						sprintf(impresion, "usuario bloqueado: %s\n", nombre);
-						imprimir(0);
-						enviar_a_cliente("9");
-						intentos = 0;
-						exit(0);
-					}
+			if( respuesta[0] == '0') {
+				intentos++;
+				if(intentos >= LIMITE_INTENTOS) {
+					char* nombre = strtok(buffer, "-");
+					sprintf(impresion, "usuario bloqueado: %s\n", nombre);
+					imprimir(0);
+					enviar_a_cola_local((long) BLOQUEAR_USUARIO, nombre, 'a');
+					enviar_a_cliente("9");
+					intentos = 0;
+					log = 0;
+					break;
 				}
-
-				if(log == 1) {
-					while(1) {
-						recepcion();
-						parse(user_logueado);
-			    }
+				else {
+					char* nombre = strtok(buffer, "-");
+					sprintf(impresion, "intento de logueo fallido: %s\n", nombre);
+					imprimir(0);
+					enviar_a_cliente("0");
 				}
+			}
+			else if(respuesta[0] == '1') {
+				user_logueado = malloc(strlen(strtok(buffer, "-")));
+				strcpy(user_logueado, strtok(buffer, "-"));
+				sprintf(impresion, "nuevo cliente: %s\n", user_logueado);
+				imprimir(0);
+				enviar_a_cliente("1");
+				intentos = 0;
+				log = 1;
+				break;
+			}
+			else if(respuesta[0] == '9') {
+				char* nombre = strtok(buffer, "-");
+				sprintf(impresion, "usuario bloqueado: %s\n", nombre);
+				imprimir(0);
+				enviar_a_cliente("9");
+				intentos = 0;
+				log = 0;
+				break;
+			}
 		}
-		else {
-			// proceso original del servidor
-			sprintf(impresion, "autenticando\n");
-			imprimir(0);
-			close( newsockfd );
+
+		if(log == 1) {
+			while(salida == 0) {
+				recepcion();
+				parse(user_logueado);
+			}
+			salida = 0;
 		}
 	}
 	exit(0);
@@ -132,12 +133,6 @@ void configurar_socket() {
 		imprimir(1);
 		exit(1);
 	}
-	else {
-		sprintf(impresion, "iniciando\n");
-		imprimir(0);
-		sprintf(impresion, "proceso: %d - puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
-		imprimir(0);
-	}
 }
 
 /**
@@ -145,7 +140,7 @@ void configurar_socket() {
  */
 void recepcion() {
 	memset( buffer, 0, BUFFER_SIZE );
-	n = recv( newsockfd, buffer, BUFFER_SIZE, 0 );
+	n = recv( socket_cliente, buffer, BUFFER_SIZE, 0 );
 	if ( n < 0 ) {
 		sprintf(impresion, "error leyendo de socket\n");
 	  imprimir(1);
@@ -157,7 +152,7 @@ void recepcion() {
  * Envia datos por el socket
  */
 void enviar_a_cliente(char* mensaje) {
-	n = send( newsockfd, mensaje, strlen(mensaje), 0 );
+	n = send( socket_cliente, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
 		sprintf(impresion, "error enviando a cliente\n");
 	  imprimir(1);
@@ -218,9 +213,9 @@ void user_command(char* usuario, char *opcion, char *argumento) {
 	else if( strcmp("passwd", opcion) == 0 && strcmp(" ", argumento) != 0)
 		user_passwd(usuario, argumento);
 	else {
-		enviar_a_cliente(	" \nUso: user [opcion] <argumento>\n\n"
+		enviar_a_cliente(	" Uso: user [opcion] <argumento>\n\n"
 							"	- ls : listado de usuarios\n"
-							"	- passwd <nueva contraseña> : cambio de contraseña\n");
+							"	- passwd <nueva contraseña> : cambio de contraseña");
 	}
 }
 
@@ -239,7 +234,7 @@ void user_ls() {
 void user_passwd(char* usuario, char* clave) {
 
 	if( strlen(clave) < 3 || strlen(clave) > USUARIO_CLAVE_SIZE) {
-		enviar_a_cliente("\nClave invalida\n");
+		enviar_a_cliente("Clave invalida");
 		return;
 	}
 
@@ -253,7 +248,7 @@ void user_passwd(char* usuario, char* clave) {
 	recibir_de_cola((long) CAMBIAR_CLAVE_RESPONSE, 'p');
 
 	free(tmp);
-	enviar_a_cliente("\nClave cambiada con exito\n");
+	enviar_a_cliente("Clave cambiada con exito");
 }
 
 /**
@@ -265,9 +260,9 @@ void file_command(char *opcion, char *argumento) {
 	else if( strcmp("down", opcion) == 0 && strcmp(" ", argumento) != 0)
 		file_down(argumento);
 	else {
-		enviar_a_cliente(	" \nUso: file [opcion] <argumento>\n\n"
+		enviar_a_cliente(	" Uso: file [opcion] <argumento>\n\n"
 							"	- ls : listado de archivos\n"
-							"	- down <archivo> : descarga de archivo\n");
+							"	- down <archivo> : descarga de archivo");
 	}
 }
 
@@ -295,18 +290,18 @@ void file_down(char* archivo_index) {
 void exit_command(char* usuario) {
 	sprintf(impresion, "%s ha salido\n", usuario);
 	imprimir(0);
-	exit(0);
+	salida = 1;
 }
 
 /**
  * Reaccion a comando desconocido
  */
 void unknown_command() {
-	enviar_a_cliente(	"\nComando no reconocido\n"
+	enviar_a_cliente(	"Comando no reconocido\n"
 						"Comandos aceptados:\n"
 						"	- user\n"
 						"	- file\n"
-						"	- exit\n");
+						"	- exit");
 }
 
 /**

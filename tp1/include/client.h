@@ -10,4 +10,3 @@ void conectar_a_primary();
 void conectar_a_file();
 void descargar();
 int32_t logueo();
-int32_t fin(char[BUFFER_SIZE]);

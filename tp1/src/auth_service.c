@@ -71,12 +71,15 @@ int32_t main() {
 			sprintf(impresion, "nombres request\n");
 			imprimir(0);
 
-			char* primero = "\n[Usuario] - [Ultima conexion]\n";
+			char* primero = "[Usuario] - [Ultima conexion]\n";
 			int32_t size = strlen(primero);
 			char* aux = " - ";
 			char* salto = "\n";
-			for(int32_t i = 0; i < CANT_USUARIOS; i++)
-				size = size + strlen(usuarios[i]->nombre) + strlen(aux) + strlen(usuarios[i]->ultima_conexion) + strlen(salto);
+			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+				size = size + strlen(usuarios[i]->nombre) + strlen(aux) + strlen(usuarios[i]->ultima_conexion);
+				if(i < CANT_USUARIOS - 1)
+					size = size + strlen(salto);
+			}
 
 			char users_info[size];
 			strcpy(users_info, "\0");
@@ -86,7 +89,8 @@ int32_t main() {
 				strcat(users_info, usuarios[i]->nombre);
 				strcat(users_info, aux);
 				strcat(users_info, usuarios[i]->ultima_conexion);
-				strcat(users_info, salto);
+				if(i < CANT_USUARIOS - 1)
+					strcat(users_info, salto);
 			}
 			enviar_a_cola_local((long) NOMBRES_RESPONSE, users_info, 'p');
 			sprintf(impresion, "nombres response\n");

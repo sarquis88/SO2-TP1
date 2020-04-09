@@ -55,14 +55,17 @@ int32_t main( int32_t argc, char *argv[] ) {
 			sprintf(impresion, "archivos request\n");
 			imprimir(0);
 
-      char* primero = "\n[Indice] - [Nombre de archivos] - [Formato]\n";
+      char* primero = "[Indice] - [Nombre de archivos] - [Formato]\n";
       int32_t size = strlen(primero);
       char* salto = "\n";
       char* guion = " - ";
       char index[2];
-      for(int32_t i = 0; i < CANT_ARCHIVOS; i++)
+      for(int32_t i = 0; i < CANT_ARCHIVOS; i++) {
         size = size + strlen(index) + strlen(guion) * 2 +
-        strlen(archivos[i]->nombre) + strlen(archivos[i]->formato) + strlen(salto);
+        strlen(archivos[i]->nombre) + strlen(archivos[i]->formato);
+				if(i < CANT_ARCHIVOS - 1)
+        	size = size + strlen(salto);
+			}
 
       char files[size];
       strcpy(files, "\0");
@@ -75,7 +78,8 @@ int32_t main( int32_t argc, char *argv[] ) {
         strcat(files, archivos[i]->nombre);
         strcat(files, guion);
         strcat(files, archivos[i]->formato);
-        strcat(files, salto);
+				if(i < CANT_ARCHIVOS - 1)
+        	strcat(files, salto);
       }
 
 			enviar_a_cola_local((long) ARCHIVOS_RESPONSE, files, 'p');
@@ -118,8 +122,6 @@ int32_t main( int32_t argc, char *argv[] ) {
 					exit(0);
 				}
 				else {
-					sprintf(impresion, "enviando archivo\n");
-					imprimir(0);
 					close( newsockfd );
 				}
 			}
@@ -256,8 +258,17 @@ void enviar_archivo(int32_t index_descarga) {
 	strcat(path_archivo, FILES_DIR_NAME);
 	strcat(path_archivo, nombre_archivo);
 
-	FILE* file = fopen(path_archivo, "rb");	// rb para archivos de no-texto;
+	sprintf(impresion, "enviando hash de %s\n", nombre_archivo);
+	imprimir(0);
 
+	char* hash = get_md5(path_archivo);
+	enviar_a_cliente(hash);
+	free(hash);
+
+	sprintf(impresion, "enviando %s\n", nombre_archivo);
+	imprimir(0);
+
+	FILE* file = fopen(path_archivo, "rb");	// rb para archivos de no-texto;
 	if ( file != NULL ) {
 		int32_t enviado = 0;
 		while( (n = fread(buffer, sizeof(char), sizeof(buffer), file)) > 0 ) {
@@ -265,12 +276,12 @@ void enviar_archivo(int32_t index_descarga) {
 			enviado = enviado + n;
 		}
 		enviado = (enviado * 8) / 1024; // 8: tamaño de char
-		sprintf(impresion, "enviado: %s \n", nombre_archivo);
+		sprintf(impresion, "enviado %s\n", nombre_archivo);
 		imprimir(0);
 		fclose(file);
 	}
 	else {
-		sprintf(impresion, "error abriendo archivo\n");
+		sprintf(impresion, "error abriendo %s\n", nombre_archivo);
 		imprimir(1);
 	}
 }

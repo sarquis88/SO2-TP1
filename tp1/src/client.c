@@ -1,7 +1,7 @@
 #include "../include/client.h"
 
 char buffer[BUFFER_SIZE];
-int32_t socket_primary, socket_file, n, puerto_primary, puerto_file, terminar, logueo_response;
+int32_t socket_primary, socket_file, n, puerto_primary, puerto_file, logueo_response;
 struct sockaddr_in serv_addr_primary;
 struct sockaddr_in serv_addr_file;
 struct hostent *server_primary;
@@ -32,9 +32,9 @@ int32_t main( int32_t argc, char *argv[] ) {
 		logueo_response = logueo();
 
 		if(logueo_response == 0)
-			printf("\nLogin fallido, vuelva a intentar\n\n");
+			printf("Login fallido, vuelva a intentar\n");
 		else if(logueo_response == 1) {
-			printf("\nConectado\n\n");
+			printf("Conectado\n");
 			break;
 		}
 		else if(logueo_response == 9) {
@@ -45,8 +45,6 @@ int32_t main( int32_t argc, char *argv[] ) {
 
 	while(1) {
 
-		terminar = 0;
-
 		// enviar comandos a server
 		escribir_a_servidor(1);
 
@@ -54,22 +52,18 @@ int32_t main( int32_t argc, char *argv[] ) {
 		if(buffer[0] != '\0') {
 
 			// chequeo si el cliente quiere salir
-			if(fin(buffer))
-				terminar = 1;
+			if( strcmp(buffer, "exit\n") == 0)
+				salida(1);
 
 			// recibo contestacion de servidor
 			recepcion(socket_primary);
 
-			if(terminar == 0) {
-				if( strcmp(buffer, "descarga_no") == 0)
-					printf("\nIndice de archivo no encontrado\n");
-				else if( strcmp(buffer, "descarga_si") == 0)
-					descargar();
-				else
-					printf("%s\n", buffer);
-			}
+			if( strcmp(buffer, "descarga_no") == 0)
+				printf("\nIndice de archivo no encontrado\n");
+			else if( strcmp(buffer, "descarga_si") == 0)
+				descargar();
 			else
-				salida(0);
+				printf("%s\n", buffer);
 		}
 	}
 	exit(0);
@@ -197,23 +191,10 @@ int32_t logueo() {
 }
 
 /**
- * Verifica si se termina la comunicacion
- */
-int32_t fin(char buf[BUFFER_SIZE]) {
-	buf[strlen(buf)-1] = '\0';
-	if( !strcmp( "exit", buf )) {
-		return 1;
-	}
-	else {
-		return 0;
-	}
-}
-
-/**
  * Handler de salida del cliente
  */
 void salida(int32_t sig) {
-	if(!sig) {
+	if(sig > 0) {
 		printf("Saliendo...\n");
 		fflush(stdout);
 		enviar_a_socket(socket_primary, "exit");
@@ -233,17 +214,23 @@ void descargar() {
 
 	char nombre_archivo[strlen(buffer)];
 	strcpy(nombre_archivo, buffer);
+	nombre_archivo[strlen(nombre_archivo)] = '\0';
 
-	char file_path[strlen(PATH_DOWNLOADS_DIR) + strlen(nombre_archivo)];
+	printf("Descargando hash de archivo\n");
+	recepcion(socket_file);
+	char hash_original[MD5_DIGEST_LENGTH * 2 + 1];
+	strcpy(hash_original, "\0");
+	strcat(hash_original, buffer);
+
+	char* file_path = malloc(strlen(PATH_DOWNLOADS_DIR) + strlen(nombre_archivo));
 	strcpy(file_path, "\0");
 	strcat(file_path, PATH_DOWNLOADS_DIR);
 	strcat(file_path, nombre_archivo);
 	file_path[strlen(file_path)] = '\0';
 
-  FILE* file = fopen( file_path, "wb" );
-
+	FILE* file = fopen( file_path, "wb" );
   if(file != NULL) {
-		printf("\nDescargando archivo: %s\n", file_path);
+		printf("Descargando archivo: %s\n", nombre_archivo);
 		int32_t recibido = 0;
     while( (n = recv(socket_file, buffer, sizeof(buffer), 0) ) > 0 ) {
       fwrite(buffer, sizeof(char), n, file);
@@ -256,8 +243,20 @@ void descargar() {
   }
 	else {
       perror("CLIENTE: error creando archivo de descarga\n");
+			printf("%s\n", file_path);
 			exit(1);
   }
+
+	printf("Chequeando hashes\n");
+	char* hash_descarga = get_md5(file_path);
+
+	if( strcmp(hash_original, hash_descarga) == 0 )
+		printf("Chequeo de hash exitoso\n");
+	else
+		printf("Chequeo de hash fallido: revisar descarga\n");
+
+	free(hash_descarga);
+	free(file_path);
 
 	close( socket_file );
 }
