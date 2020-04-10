@@ -59,7 +59,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 
 			recepcion();		// recepcion de credenciales por parte de cliente
 
-			if( strcmp(buffer, "exit") == 0 ) {
+			if( strcmp(buffer, "exit\n") == 0 ) {
 				exit_command( "no-user" );
 				break;
 			}

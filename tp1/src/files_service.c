@@ -112,19 +112,8 @@ int32_t main( int32_t argc, char *argv[] ) {
 
 				// empezar a escuchar
 				newsockfd = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
-				pid = fork();
-
-				// proceso hijo que atiende a cliente
-				if ( pid == 0 ) {
-					close( sockfd );
-
-					enviar_archivo(index_descarga);
-
-					exit(0);
-				}
-				else {
-					close( newsockfd );
-				}
+				enviar_archivo(index_descarga);
+				close(newsockfd);
 			}
 		}
 	}
@@ -253,30 +242,31 @@ void enviar_archivo(int32_t index_descarga) {
 
 	enviar_a_cliente(nombre_archivo);
 
-	char path_archivo[strlen(FILES_DIR_NAME) + strlen(nombre_archivo)];
-
+	char* path_archivo = malloc(strlen(FILES_DIR_NAME) + strlen(nombre_archivo));
 	strcpy(path_archivo, "\0");
 	strcat(path_archivo, FILES_DIR_NAME);
 	strcat(path_archivo, nombre_archivo);
+	path_archivo[strlen(path_archivo)] = '\0';
 
-	sprintf(impresion, "enviando hash de %s\n", nombre_archivo);
+	sprintf(impresion, "enviando hash de %s\n", archivos[index_descarga]->nombre);
 	imprimir(0);
 
 	char* hash = get_md5(path_archivo);
 	enviar_a_cliente(hash);
+
+	sprintf(impresion, "enviado hash: %s\n", hash);
+	imprimir(0);
 	free(hash);
 
 	sprintf(impresion, "enviando %s\n", nombre_archivo);
 	imprimir(0);
 
 	FILE* file = fopen(path_archivo, "rb");	// rb para archivos de no-texto;
+
 	if ( file != NULL ) {
-		int32_t enviado = 0;
-		while( (n = fread(buffer, sizeof(char), sizeof(buffer), file)) > 0 ) {
+		while( (n = fread(buffer, sizeof(char), sizeof(buffer), file)) > 0 )
 			send(newsockfd, buffer, sizeof(buffer), 0);
-			enviado = enviado + n;
-		}
-		enviado = (enviado * 8) / 1024; // 8: tamaño de char
+
 		sprintf(impresion, "enviado %s\n", nombre_archivo);
 		imprimir(0);
 		fclose(file);
@@ -285,4 +275,5 @@ void enviar_archivo(int32_t index_descarga) {
 		sprintf(impresion, "error abriendo %s\n", nombre_archivo);
 		imprimir(1);
 	}
+	free(path_archivo);
 }

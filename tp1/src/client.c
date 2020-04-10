@@ -25,7 +25,9 @@ int32_t main( int32_t argc, char *argv[] ) {
 	conectar_a_primary();
 
 	// activar handler para SIGINT
- 	signal(SIGINT, salida);
+	struct sigaction sa;
+  sa.sa_handler = salida;
+	sigaction(SIGINT, &sa,  NULL);
 
 	// intento de logueo
 	while(1) {
@@ -60,8 +62,10 @@ int32_t main( int32_t argc, char *argv[] ) {
 
 			if( strcmp(buffer, "descarga_no") == 0)
 				printf("\nIndice de archivo no encontrado\n");
-			else if( strcmp(buffer, "descarga_si") == 0)
+			else if( strcmp(buffer, "descarga_si") == 0) {
 				descargar();
+				mover_a_usb();
+			}
 			else
 				printf("%s\n", buffer);
 		}
@@ -126,7 +130,7 @@ void escribir_a_servidor(int32_t simbolo) {
 		if(simbolo == 1)
 			printf( "> " );
 
-		fgets( buffer, BUFFER_SIZE-1, stdin );
+		fgets( buffer, BUFFER_SIZE, stdin );
 
 		if(buffer[0] != 10) {
 			n = send( socket_primary, buffer, strlen(buffer), 0 );
@@ -197,7 +201,7 @@ void salida(int32_t sig) {
 	if(sig > 0) {
 		printf("Saliendo...\n");
 		fflush(stdout);
-		enviar_a_socket(socket_primary, "exit");
+		enviar_a_socket(socket_primary, "exit\n");
 	}
 	exit(0);
 }
@@ -215,31 +219,31 @@ void descargar() {
 	char nombre_archivo[strlen(buffer)];
 	strcpy(nombre_archivo, buffer);
 	nombre_archivo[strlen(nombre_archivo)] = '\0';
+	printf("Empezando descarga de %s\n", nombre_archivo);
 
-	printf("Descargando hash de archivo\n");
+	printf("Descargando hash...\n");
 	recepcion(socket_file);
 	char hash_original[MD5_DIGEST_LENGTH * 2 + 1];
 	strcpy(hash_original, "\0");
 	strcat(hash_original, buffer);
+	printf("Descarga terminada\n");
 
-	char* file_path = malloc(strlen(PATH_DOWNLOADS_DIR) + strlen(nombre_archivo));
+	char file_path[strlen(PATH_DOWNLOADS_DIR) + strlen(nombre_archivo)];
 	strcpy(file_path, "\0");
 	strcat(file_path, PATH_DOWNLOADS_DIR);
-	strcat(file_path, nombre_archivo);
+	strcat(file_path, DOWNLOAD_NAME);
 	file_path[strlen(file_path)] = '\0';
 
 	FILE* file = fopen( file_path, "wb" );
+
   if(file != NULL) {
-		printf("Descargando archivo: %s\n", nombre_archivo);
-		int32_t recibido = 0;
-    while( (n = recv(socket_file, buffer, sizeof(buffer), 0) ) > 0 ) {
+		printf("Descargando archivo...\n");
+    while( (n = recv(socket_file, buffer, sizeof(buffer), 0) ) > 0 )
       fwrite(buffer, sizeof(char), n, file);
-			recibido = recibido + n;
-		}
-		recibido = recibido * 8; // 8: tamaño de char
-		printf("Descarga terminada\n");
 
     fclose(file);
+		close( socket_file );
+		printf("Descarga terminada\n");
   }
 	else {
       perror("CLIENTE: error creando archivo de descarga\n");
@@ -247,16 +251,45 @@ void descargar() {
 			exit(1);
   }
 
-	printf("Chequeando hashes\n");
+	printf("Calculando hash...\n");
 	char* hash_descarga = get_md5(file_path);
+	printf("Calculo terminado\n");
 
+	printf("Comparando hash...\n");
 	if( strcmp(hash_original, hash_descarga) == 0 )
 		printf("Chequeo de hash exitoso\n");
 	else
 		printf("Chequeo de hash fallido: revisar descarga\n");
 
+	printf("Ubicacion de descarga: %s\n", file_path);
 	free(hash_descarga);
-	free(file_path);
+}
 
-	close( socket_file );
+void mover_a_usb() {
+	char path_descarga[strlen(PATH_DOWNLOADS_DIR) + strlen(DOWNLOAD_NAME)];
+	sprintf(path_descarga, "%s%s", PATH_DOWNLOADS_DIR, DOWNLOAD_NAME);
+	FILE* file_descarga = fopen( path_descarga, "rb" );
+
+	char path_usb[strlen(PATH_USB_DIR) + strlen(DOWNLOAD_NAME)];
+	sprintf(path_usb, "%s%s", PATH_USB_DIR, DOWNLOAD_NAME);
+	FILE* file_usb = fopen( path_usb, "wba" );
+
+	printf("Moviendo archivo a usb...\n");
+	if(file_usb != NULL) {
+	  if(file_descarga != NULL) {
+			while( (n = fread(buffer, sizeof(char), sizeof(buffer), file_descarga)) > 0 )
+	      fwrite(buffer, sizeof(char), n, file_usb);
+
+	    fclose(file_descarga);
+			fclose(file_usb);
+
+			printf("Archivo movido a %s\n", path_usb);
+	  }
+		else {
+	      perror("CLIENTE: error abriendo archivo descargado\n");
+				exit(1);
+	  }
+	}
+	else
+		perror("CLIENTE: error moviendo archivo descargado\n");
 }
