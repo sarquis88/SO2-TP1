@@ -6,7 +6,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 
   // chequeo de argumentos
 	if ( argc < 2 ) {
-        	fprintf( stderr, "Uso: %s <puerto_primario>\n", argv[0] );
+        	fprintf( stderr, "Uso: %s <direccion_ip> <puerto_primario>\n", argv[0] );
 		exit( 1 );
 	}
 

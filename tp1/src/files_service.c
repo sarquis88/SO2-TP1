@@ -5,7 +5,7 @@ int32_t newsockfd, n, qid, sockfd, pid, puerto, qid;
 uint32_t clilen;
 struct sockaddr_in serv_addr, cli_addr;
 Archivo* archivos[CANT_ARCHIVOS];
-char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE];
+char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE], direccion[16];
 
 /**
  * Funcion main
@@ -13,14 +13,15 @@ char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE];
 int32_t main( int32_t argc, char *argv[] ) {
 
 	// chequeo de argumentos
-	if ( argc < 2 ) {
-		sprintf(impresion, "Uso: %s <puerto>\n", argv[0]);
+	if ( argc < 3 ) {
+		sprintf(impresion, "Uso: %s <direccion ip> <puerto>\n", argv[0]);
     imprimir(1);
 		exit(1);
 	}
 
-	// definicion de puerto
-	puerto = atoi( argv[1] ) + 1;
+	// definicion de puerto y direccion
+	sprintf(direccion, argv[1]);
+	puerto = atoi( argv[2] ) + 1;
 
 	// configuracion de socket
 	configurar_socket();
@@ -138,7 +139,7 @@ void configurar_socket() {
 	memset( (char *) &serv_addr, 0, sizeof(serv_addr) );
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
+	serv_addr.sin_addr.s_addr = inet_addr(direccion);
 	serv_addr.sin_port = htons( puerto );
 	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
 		sprintf(impresion, "error conectando socket\n");
