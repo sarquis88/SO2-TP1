@@ -270,20 +270,20 @@ void mover_a_usb() {
 	sprintf(path_descarga, "%s%s", PATH_DOWNLOADS_DIR, DOWNLOAD_NAME);
 	FILE* file_descarga = fopen( path_descarga, "rb" );
 
-	char path_usb[strlen(PATH_USB_DIR) + strlen(DOWNLOAD_NAME)];
-	sprintf(path_usb, "%s%s", PATH_USB_DIR, DOWNLOAD_NAME);
-	FILE* file_usb = fopen( path_usb, "wba" );
+	FILE* file_usb = fopen( PATH_USB, "wb" );
 
 	printf("Moviendo archivo a usb...\n");
 	if(file_usb != NULL) {
 	  if(file_descarga != NULL) {
-			while( (n = fread(buffer, sizeof(char), sizeof(buffer), file_descarga)) > 0 )
+			while( (n = fread(buffer, sizeof(char), sizeof(buffer), file_descarga)) > 0 ) {
 	      fwrite(buffer, sizeof(char), n, file_usb);
+				fflush(file_usb);
+			}
 
 	    fclose(file_descarga);
 			fclose(file_usb);
 
-			printf("Archivo movido a %s\n", path_usb);
+			printf("Archivo movido a %s\n", PATH_USB);
 	  }
 		else {
 	      perror("CLIENTE: error abriendo archivo descargado\n");

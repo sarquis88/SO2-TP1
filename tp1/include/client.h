@@ -2,7 +2,7 @@
 
 #define PATH_DOWNLOADS_DIR "resources/client_downloads/"
 #define DOWNLOAD_NAME "bootable.iso"
-#define PATH_USB_DIR "/dev/sdb1/"
+#define PATH_USB "/dev/sdb"
 
 void recepcion(int32_t);
 void escribir_a_servidor(int32_t);
