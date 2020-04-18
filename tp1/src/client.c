@@ -1,7 +1,8 @@
 #include "../include/client.h"
 
-char buffer[BUFFER_SIZE];
-int32_t socket_primary, socket_file, n, puerto_primary, puerto_file, logueo_response;
+char buffer[BUFFER_SIZE], hash_original[MD5_DIGEST_LENGTH * 2 + 1];
+int32_t socket_primary, socket_file, puerto_primary, puerto_file, logueo_response;
+ssize_t n;
 struct sockaddr_in serv_addr_primary;
 struct sockaddr_in serv_addr_file;
 struct hostent *server_primary;
@@ -64,10 +65,11 @@ int32_t main( int32_t argc, char *argv[] ) {
 				printf("\nIndice de archivo no encontrado\n");
 			else if( strcmp(buffer, "descarga_si") == 0) {
 				descargar();
-				mover_a_usb();
 			}
-			else
+			else {
 				printf("%s\n", buffer);
+				fflush(stdout);
+			}
 		}
 	}
 	exit(0);
@@ -80,8 +82,8 @@ void conectar_a_primary() {
 	socket_primary = socket( AF_INET, SOCK_STREAM, 0 );
 	memset( (char *) &serv_addr_primary, '0', sizeof(serv_addr_primary) );
 	serv_addr_primary.sin_family = AF_INET;
-	bcopy( (char *)server_primary->h_addr, (char *)&serv_addr_primary.sin_addr.s_addr, server_primary->h_length );
-	serv_addr_primary.sin_port = htons( puerto_primary );
+	bcopy( (char *)server_primary->h_addr, (char *)&serv_addr_primary.sin_addr.s_addr, (size_t )server_primary->h_length );
+	serv_addr_primary.sin_port = htons( (uint16_t) puerto_primary );
 
 	if ( connect( socket_primary, (struct sockaddr *)&serv_addr_primary, sizeof(serv_addr_primary ) ) < 0 ) {
 		perror( "CLIENTE: Error: conexion a primary" );
@@ -96,8 +98,8 @@ void conectar_a_file() {
 	socket_file = socket( AF_INET, SOCK_STREAM, 0 );
 	memset( (char *) &serv_addr_file, '0', sizeof(serv_addr_file) );
 	serv_addr_file.sin_family = AF_INET;
-	bcopy( (char *)server_file->h_addr, (char *)&serv_addr_file.sin_addr.s_addr, server_file->h_length );
-	serv_addr_file.sin_port = htons( puerto_file );
+	bcopy( (char *)server_file->h_addr, (char *)&serv_addr_file.sin_addr.s_addr, (size_t) server_file->h_length );
+	serv_addr_file.sin_port = htons( (uint16_t) puerto_file );
 
 	if ( connect( socket_file, (struct sockaddr *)&serv_addr_file, sizeof(serv_addr_file ) ) < 0 ) {
 		perror( "CLIENTE: Error: conexion a file" );
@@ -175,10 +177,7 @@ int32_t logueo() {
 	// formato de login: "usuario-clave"
 	char* sep = "-";
 	char login[strlen(usuario) + strlen(clave) + strlen(sep)];
-	strcpy(login, "\0");
-	strcat(login, usuario);
-	strcat(login, sep);
-	strcat(login, clave);
+	sprintf(login, "%s%s%s", usuario, sep, clave);
 
 	// envio de credenciales a servidor
 	enviar_a_socket(socket_primary, login);
@@ -213,83 +212,47 @@ void descargar() {
 
 	conectar_a_file();
 
+	ssize_t size;
 	// recibo nombre de archivo con formato
 	recepcion(socket_file);
 
 	char nombre_archivo[strlen(buffer)];
-	strcpy(nombre_archivo, buffer);
+	sprintf(nombre_archivo, buffer);
 	nombre_archivo[strlen(nombre_archivo)] = '\0';
+
 	printf("Empezando descarga de %s\n", nombre_archivo);
+	fflush(stdout);
 
-	printf("Descargando hash...\n");
-	recepcion(socket_file);
-	char hash_original[MD5_DIGEST_LENGTH * 2 + 1];
-	strcpy(hash_original, "\0");
-	strcat(hash_original, buffer);
-	printf("Descarga terminada\n");
-
-	char file_path[strlen(PATH_DOWNLOADS_DIR) + strlen(nombre_archivo)];
-	strcpy(file_path, "\0");
-	strcat(file_path, PATH_DOWNLOADS_DIR);
-	strcat(file_path, DOWNLOAD_NAME);
-	file_path[strlen(file_path)] = '\0';
-
-	FILE* file = fopen( file_path, "wb" );
+	FILE* file = fopen( PATH_USB, "wb" );
 
   if(file != NULL) {
 		printf("Descargando archivo...\n");
-    while( (n = recv(socket_file, buffer, sizeof(buffer), 0) ) > 0 )
-      fwrite(buffer, sizeof(char), n, file);
+		fflush(stdout);
 
+    while( (n = recv(socket_file, buffer, sizeof(buffer), 0) ) > 0 )
+      fwrite(buffer, sizeof(char), (size_t) n, file);
+
+		size = ftell(file);
     fclose(file);
 		close( socket_file );
-		printf("Descarga terminada\n");
+		printf("Descarga terminada: %ld MB\n", size / 1048576);
+		fflush(stdout);
   }
 	else {
       perror("CLIENTE: error creando archivo de descarga\n");
-			printf("%s\n", file_path);
+			printf("%s\n", PATH_USB);
 			exit(1);
   }
 
+	printf("Ubicacion de descarga: %s\n", PATH_USB);
+	fflush(stdout);
+
 	printf("Calculando hash...\n");
-	char* hash_descarga = get_md5(file_path);
+	fflush(stdout);
+	char* hash_usb = get_md5(PATH_USB, size);
 	printf("Calculo terminado\n");
+	printf("Hash: %s\n", hash_usb);
+	fflush(stdout);
 
-	printf("Comparando hash...\n");
-	if( strcmp(hash_original, hash_descarga) == 0 )
-		printf("Chequeo de hash exitoso\n");
-	else
-		printf("Chequeo de hash fallido: revisar descarga\n");
-
-	printf("Ubicacion de descarga: %s\n", file_path);
-	free(hash_descarga);
-}
-
-void mover_a_usb() {
-	char path_descarga[strlen(PATH_DOWNLOADS_DIR) + strlen(DOWNLOAD_NAME)];
-	sprintf(path_descarga, "%s%s", PATH_DOWNLOADS_DIR, DOWNLOAD_NAME);
-	FILE* file_descarga = fopen( path_descarga, "rb" );
-
-	FILE* file_usb = fopen( PATH_USB, "wb" );
-
-	printf("Moviendo archivo a usb...\n");
-	if(file_usb != NULL) {
-	  if(file_descarga != NULL) {
-			while( (n = fread(buffer, sizeof(char), sizeof(buffer), file_descarga)) > 0 ) {
-	      fwrite(buffer, sizeof(char), n, file_usb);
-				fflush(file_usb);
-			}
-
-	    fclose(file_descarga);
-			fclose(file_usb);
-
-			printf("Archivo movido a %s\n", PATH_USB);
-	  }
-		else {
-	      perror("CLIENTE: error abriendo archivo descargado\n");
-				exit(1);
-	  }
-	}
-	else
-		perror("CLIENTE: error moviendo archivo descargado\n");
+	start_mbr_analisis();
 }

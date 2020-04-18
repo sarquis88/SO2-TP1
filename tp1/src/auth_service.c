@@ -46,11 +46,11 @@ int32_t main() {
 
 			char rta[2];
 			if(log == 0)
-				strcpy(rta, "0");
+				sprintf(rta, "0");
 			else if(log == 1)
-				strcpy(rta, "1");
+				sprintf(rta, "1");
 			else if(log == 9)
-				strcpy(rta, "9");
+				sprintf(rta, "9");
 
 			enviar_a_cola_local((long) LOGIN_RESPONSE, rta, 'p');
 			sprintf(impresion, "login response (rta: %s)\n", rta);
@@ -71,24 +71,35 @@ int32_t main() {
 			sprintf(impresion, "nombres request\n");
 			imprimir(0);
 
-			char* primero = "[Usuario] - [Ultima conexion]\n";
-			int32_t size = strlen(primero);
-			char* aux = " - ";
+			char* primero = "[Usuario] - [Bloqueado] - [Ultima conexion]\n";
+			size_t size = strlen(primero);
+			char* guion = " - ";
 			char* salto = "\n";
+			char bloqueado[3];
 			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
-				size = size + strlen(usuarios[i]->nombre) + strlen(aux) + strlen(usuarios[i]->ultima_conexion);
+				size = size + strlen(usuarios[i]->nombre) + strlen(guion) * 2 +
+				strlen(usuarios[i]->ultima_conexion) + strlen(bloqueado);
 				if(i < CANT_USUARIOS - 1)
 					size = size + strlen(salto);
 			}
 
 			char users_info[size];
-			strcpy(users_info, "\0");
-
-			strcat(users_info, primero);
+			sprintf(users_info, primero);
 			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
-				strcat(users_info, usuarios[i]->nombre);
-				strcat(users_info, aux);
-				strcat(users_info, usuarios[i]->ultima_conexion);
+
+				if(usuarios[i]->bloqueado[0] == '0')
+					sprintf(bloqueado, "No");
+				else
+					sprintf(bloqueado, "Si");
+
+				char tmp[strlen(users_info)];
+				sprintf(tmp, users_info);
+				sprintf(users_info, "%s%s%s%s%s%s",	tmp,
+																						usuarios[i]->nombre,
+																						guion,
+																						bloqueado,
+																						guion,
+																						usuarios[i]->ultima_conexion);
 				if(i < CANT_USUARIOS - 1)
 					strcat(users_info, salto);
 			}
@@ -125,7 +136,7 @@ int32_t conectar() {
 
 			int32_t index = 0;
       while ( fgets( line, LINE_SIZE, file ) != NULL ) {
-				strcpy(lineas[index], line);
+				sprintf(lineas[index], line);
 				index++;
       }
       fclose ( file );
@@ -137,13 +148,13 @@ int32_t conectar() {
 		int32_t usuario_index = i / CANT_USUARIOS;
 		usuarios[usuario_index] = malloc(sizeof(Usuario));
 
-		strcpy(usuarios[usuario_index]->nombre, lineas[i++]);
+		sprintf(usuarios[usuario_index]->nombre, lineas[i++]);
 		usuarios[usuario_index]->nombre[strlen(usuarios[usuario_index]->nombre) - 1] = '\0';
-		strcpy(usuarios[usuario_index]->clave, lineas[i++]);
+		sprintf(usuarios[usuario_index]->clave, lineas[i++]);
 		usuarios[usuario_index]->clave[strlen(usuarios[usuario_index]->clave) - 1] = '\0';
-		strcpy(usuarios[usuario_index]->bloqueado, lineas[i++]);
+		sprintf(usuarios[usuario_index]->bloqueado, lineas[i++]);
 		usuarios[usuario_index]->bloqueado[strlen(usuarios[usuario_index]->bloqueado) - 1] = '\0';
-		strcpy(usuarios[usuario_index]->ultima_conexion, lineas[i++]);
+		sprintf(usuarios[usuario_index]->ultima_conexion, lineas[i++]);
 		usuarios[usuario_index]->ultima_conexion[strlen(usuarios[usuario_index]->ultima_conexion) - 1] = '\0';
 	}
 
@@ -171,15 +182,15 @@ int32_t cambiar_clave(char* credenciales_nuevas) {
 
 	char* aux = strtok(credenciales_nuevas, "-");
 	char nombre[strlen(aux)];
-	strcpy(nombre, aux);
+	sprintf(nombre, aux);
 
 	aux = strtok(NULL, "\0");
 	char nueva_clave[strlen(aux)];
-	strcpy(nueva_clave, aux);
+	sprintf(nueva_clave, aux);
 
 	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
 		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {
-			strcpy(usuarios[i]->clave, nueva_clave);
+			sprintf(usuarios[i]->clave, nueva_clave);
 			break;
 		}
 	}
@@ -200,7 +211,7 @@ int32_t set_ultima_conexion(char* usuario) {
 
 	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
 		if( strcmp(usuario, usuarios[i]->nombre) == 0 ) {
-			strcpy(usuarios[i]->ultima_conexion, nueva_ultima_conexion);
+			sprintf(usuarios[i]->ultima_conexion, nueva_ultima_conexion);
 			break;
 		}
 	}
@@ -220,11 +231,11 @@ int32_t login(char* credenciales) {
 
 	login = strtok(credenciales, "-");
 	char nombre[strlen(login)];
-	strcpy(nombre, login);
+	sprintf(nombre, login);
 
 	login = strtok(NULL, "-");
 	char clave[strlen(login)];
-	strcpy(clave, login);
+	sprintf(clave, login);
 
 	for(int32_t i = 0; i < CANT_USUARIOS	; i++) {
 		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {
@@ -292,5 +303,4 @@ void imprimir(int32_t error) {
 			printf("AUTH_SERVICE: %s", impresion);
 		fflush(stdout);
 		printf("\033[0m");
-		strcpy(impresion, "\0");
 }

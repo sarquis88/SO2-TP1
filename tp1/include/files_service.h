@@ -15,4 +15,6 @@ typedef struct {
   int32_t index;
   char nombre[ARCHIVO_NOMBRE_SIZE];
   char formato[ARCHIVO_FORMATO_SIZE];
+  ssize_t size;
+  char hash[MD5_DIGEST_LENGTH * 2 + 1];
 } Archivo;

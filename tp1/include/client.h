@@ -1,8 +1,5 @@
 #include "utilities.h"
-
-#define PATH_DOWNLOADS_DIR "resources/client_downloads/"
-#define DOWNLOAD_NAME "bootable.iso"
-#define PATH_USB "/dev/sdb"
+#include "mbr_interpreter.h"
 
 void recepcion(int32_t);
 void escribir_a_servidor(int32_t);
@@ -11,5 +8,4 @@ void salida(int32_t);
 void conectar_a_primary();
 void conectar_a_file();
 void descargar();
-void mover_a_usb();
 int32_t logueo();

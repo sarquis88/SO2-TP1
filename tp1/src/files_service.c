@@ -1,7 +1,8 @@
 #include "../include/files_service.h"
 
 // definicion de variables
-int32_t newsockfd, n, qid, sockfd, pid, puerto, qid;
+int32_t newsockfd, qid, sockfd, pid, puerto, qid;
+ssize_t n;
 uint32_t clilen;
 struct sockaddr_in serv_addr, cli_addr;
 Archivo* archivos[CANT_ARCHIVOS];
@@ -56,29 +57,38 @@ int32_t main( int32_t argc, char *argv[] ) {
 			sprintf(impresion, "archivos request\n");
 			imprimir(0);
 
-      char* primero = "[Indice] - [Nombre de archivos] - [Formato]\n";
-      int32_t size = strlen(primero);
+      char* primero = "<Indice> - <Nombre> - <Formato> - <Tamaño [MB]> - <Hash>\n";
+      size_t size = strlen(primero);
       char* salto = "\n";
       char* guion = " - ";
       char index[2];
+			char size_archivo[ARCHIVO_NOMBRE_SIZE];
       for(int32_t i = 0; i < CANT_ARCHIVOS; i++) {
-        size = size + strlen(index) + strlen(guion) * 2 +
-        strlen(archivos[i]->nombre) + strlen(archivos[i]->formato);
+				sprintf(size_archivo, "%ld", archivos[i]->size);
+
+        size = size + strlen(index) + strlen(guion) * 4 +
+        strlen(archivos[i]->nombre) + strlen(archivos[i]->formato) +
+				strlen(archivos[i]->hash) + strlen(size_archivo);
 				if(i < CANT_ARCHIVOS - 1)
         	size = size + strlen(salto);
 			}
 
       char files[size];
-      strcpy(files, "\0");
-
-      strcat(files, primero);
+      sprintf(files, primero);
       for(int32_t i = 0; i < CANT_ARCHIVOS; i++) {
-        sprintf(index, "%d", archivos[i]->index);
-        strcat(files, index);
-        strcat(files, guion);
-        strcat(files, archivos[i]->nombre);
-        strcat(files, guion);
-        strcat(files, archivos[i]->formato);
+
+				char tmp[strlen(files)];
+				sprintf(tmp, files);
+        sprintf(files, "%s%d%s%s%s%s%s%ld%s%s", 	tmp,
+																								archivos[i]->index,
+																								guion,
+																								archivos[i]->nombre,
+																								guion,
+																								archivos[i]->formato,
+																								guion,
+																								archivos[i]->size,
+																								guion,
+																								archivos[i]->hash);
 				if(i < CANT_ARCHIVOS - 1)
         	strcat(files, salto);
       }
@@ -129,7 +139,7 @@ void configurar_socket() {
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = inet_addr(direccion);
-	serv_addr.sin_port = htons( puerto );
+	serv_addr.sin_port = htons( (uint16_t) puerto );
 	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
 		sprintf(impresion, "error conectando socket\n");
 		imprimir(1);
@@ -155,15 +165,39 @@ int32_t conectar() {
   if ((dir = opendir (FILES_DIR_NAME)) != NULL) {
     while ((ent = readdir (dir)) != NULL) {
       if( ent->d_name[0] != '.' ) {
+				sprintf(impresion, "configurando archivo nro %d...\n", index);
+				imprimir(0);
 
         archivos[index] = malloc(sizeof(Archivo));
 
+				char path[strlen(FILES_DIR_NAME) + strlen(ent->d_name) + 1];
+				sprintf(path, "%s%s", FILES_DIR_NAME, ent->d_name);
+				path[strlen(path)] = '\0';
+
         archivos[index]->index = index;
-    		strcpy(archivos[index]->nombre, strtok(ent->d_name, "."));
+    		sprintf(archivos[index]->nombre, strtok(ent->d_name, "."));
     		archivos[index]->nombre[strlen(archivos[index]->nombre)] = '\0';
-    		strcpy(archivos[index]->formato, strtok(NULL, "."));
+    		sprintf(archivos[index]->formato, strtok(NULL, "."));
     		archivos[index]->formato[strlen(archivos[index]->formato)] = '\0';
+
+				FILE* file = fopen(path, "rb");
+				if(file != NULL) {
+
+					fseek(file, 0L, SEEK_END);
+					ssize_t size = ftell(file);
+					if(size < 0)
+						size = INT_MAX;
+					else
+						archivos[index]->size = size / 1048576;
+
+					fclose(file);
+				}
+
+				sprintf(archivos[index]->hash, get_md5(path, 0));
         index++;
+
+				sprintf(impresion, "configuracion terminada\n");
+				imprimir(0);
       }
     }
     closedir (dir);
@@ -198,7 +232,6 @@ void imprimir(int32_t error) {
 			printf("FILES_SERVICE: %s", impresion);
 		fflush(stdout);
 		printf("\033[0m");
-		strcpy(impresion, "\0");
 }
 
 /**
@@ -234,37 +267,23 @@ void enviar_archivo(int32_t index_descarga) {
 	char* punto = ".";
 	char nombre_archivo[strlen(archivos[index_descarga]->nombre) + strlen(archivos[index_descarga]->formato)
 		+ strlen(punto)];
-	strcpy(nombre_archivo, "\0");
-	strcat(nombre_archivo, archivos[index_descarga]->nombre);
-	strcat(nombre_archivo, punto);
-	strcat(nombre_archivo, archivos[index_descarga]->formato);
+	sprintf(nombre_archivo, "%s%s%s", archivos[index_descarga]->nombre,
+																		punto,
+																		archivos[index_descarga]->formato);
 	nombre_archivo[strlen(nombre_archivo)] = '\0';
 
 	enviar_a_cliente(nombre_archivo);
 
 	char* path_archivo = malloc(strlen(FILES_DIR_NAME) + strlen(nombre_archivo));
-	strcpy(path_archivo, "\0");
-	strcat(path_archivo, FILES_DIR_NAME);
-	strcat(path_archivo, nombre_archivo);
+	sprintf(path_archivo, "%s%s", FILES_DIR_NAME, nombre_archivo);
 	path_archivo[strlen(path_archivo)] = '\0';
-
-	sprintf(impresion, "enviando hash de %s\n", archivos[index_descarga]->nombre);
-	imprimir(0);
-
-	char* hash = get_md5(path_archivo);
-	enviar_a_cliente(hash);
-
-	sprintf(impresion, "enviado hash: %s\n", hash);
-	imprimir(0);
-	free(hash);
 
 	sprintf(impresion, "enviando %s\n", nombre_archivo);
 	imprimir(0);
 
 	FILE* file = fopen(path_archivo, "rb");	// rb para archivos de no-texto;
-
 	if ( file != NULL ) {
-		while( (n = fread(buffer, sizeof(char), sizeof(buffer), file)) > 0 )
+		while( fread(buffer, sizeof(char), sizeof(buffer), file) > 0 )
 			send(newsockfd, buffer, sizeof(buffer), 0);
 
 		sprintf(impresion, "enviado %s\n", nombre_archivo);

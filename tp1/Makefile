@@ -1,5 +1,4 @@
-FLAGS=-Wall -Werror -pedantic -Wextra -Wconversion -g
-FLAGS=-Wall -Werror -pedantic -Wextra -lcrypto -g
+FLAGS= -std=gnu11 -Wall -Werror -pedantic -Wextra -lcrypto -O1 -Wconversion -g
 
 make:
 	gcc $(FLAGS) src/primary_server.c src/utilities.c -o bin/primary_server.o

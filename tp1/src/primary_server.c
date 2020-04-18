@@ -1,7 +1,8 @@
 #include "../include/primary_server.h"
 
 // definicion de variables
-int32_t socket_cliente, n, qid, sockfd, pid, puerto, salida;
+int32_t socket_cliente, qid, sockfd, pid, puerto, salida;
+ssize_t n;
 uint32_t clilen;
 struct sockaddr_in serv_addr, cli_addr;
 char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE], direccion[16];
@@ -49,8 +50,8 @@ int32_t main( int32_t argc, char *argv[] ) {
 
 		int32_t intentos = 0;
 		salida = 0;
-		int32_t log;
-		char* user_logueado;
+		int32_t log = 0;
+		char user_logueado[USUARIO_NOMBRE_SIZE];
 
 		sprintf(impresion, "autenticando\n");
 		imprimir(0);
@@ -85,11 +86,11 @@ int32_t main( int32_t argc, char *argv[] ) {
 					sprintf(impresion, "intento de logueo fallido: %s\n", nombre);
 					imprimir(0);
 					enviar_a_cliente("0");
+					log = 0;
 				}
 			}
 			else if(respuesta[0] == '1') {
-				user_logueado = malloc(strlen(strtok(buffer, "-")));
-				strcpy(user_logueado, strtok(buffer, "-"));
+				sprintf(user_logueado, strtok(buffer, "-"));
 				sprintf(impresion, "nuevo cliente: %s\n", user_logueado);
 				imprimir(0);
 				enviar_a_cliente("1");
@@ -128,7 +129,7 @@ void configurar_socket() {
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_addr.s_addr = inet_addr(direccion);
-	serv_addr.sin_port = htons( puerto );
+	serv_addr.sin_port = htons( (uint16_t) puerto );
 	if ( bind(sockfd, ( struct sockaddr *) &serv_addr, sizeof( serv_addr ) ) < 0 ) {
 		sprintf(impresion, "error conectando socket\n");
 		imprimir(1);
@@ -169,24 +170,27 @@ void enviar_a_cliente(char* mensaje) {
 void parse(char* usuario_logueado) {
 	buffer[strlen(buffer)-1] = '\0';
 
-	char *mensaje, *comando, *opcion, *argumento;
+	char* mensaje;
+	char opcion[COMANDO_SIZE];
+	char argumento[COMANDO_SIZE];
+	char comando[COMANDO_SIZE];
 	int32_t i = 0;
 
 	mensaje = strtok(buffer, " ");
-	opcion = " ";
-	argumento = " ";
+	sprintf(opcion, " ");
+	sprintf(argumento, " ");
 
 	while(mensaje != NULL) {
 		if(i == 0) {
-			comando = mensaje;
+			sprintf(comando, mensaje);
 			i++;
 		}
 		else if(i == 1) {
-			opcion = mensaje;
+			sprintf(opcion, mensaje);
 			i++;
 		}
 		else {
-			argumento = mensaje;
+			sprintf(argumento, mensaje)	;
 			break;
 		}
 		mensaje = strtok(NULL, " ");
@@ -241,9 +245,7 @@ void user_passwd(char* usuario, char* clave) {
 
 	char* aux = "-";
 	char* tmp = malloc(strlen(usuario) + strlen(clave) + strlen(aux));
-	strcat(tmp, usuario);
-	strcat(tmp, aux);
-	strcat(tmp, clave);
+	sprintf(tmp,"%s%s%s", usuario, aux, clave);
 	enviar_a_cola_local((long) CAMBIAR_CLAVE_REQUEST, tmp, 'a');
 
 	recibir_de_cola((long) CAMBIAR_CLAVE_RESPONSE, 'p');
@@ -327,5 +329,4 @@ void imprimir(int32_t error) {
 			printf("PRIMARY_SERVER: %s", impresion);
 		fflush(stdout);
 		printf("\033[0m");
-		strcpy(impresion, "\0");
 }

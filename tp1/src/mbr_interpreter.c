@@ -1,109 +1,4 @@
-#include "../include/utilities.h"
-
-/**
- * Creacion de cola
- * Retorna el id de la misma (puede ser -1 : error)
- */
-int32_t get_cola(char proceso) {
-
-  key_t qkey;
-  if( proceso == 'p' )
-    qkey = ftok(PRIMARY_QUEUE_FILE_NAME, PROJ_ID);
-  else if( proceso == 'f')
-    qkey = ftok(FILE_QUEUE_FILE_NAME, PROJ_ID);
-  else if( proceso == 'a')
-    qkey = ftok(AUTH_QUEUE_FILE_NAME, PROJ_ID);
-  else {
-    printf("Error obteniendo token: proceso desconocido\n");
-    exit(1);
-  }
-
-  if (qkey == -1) {
-    perror("Obteniendo token: ");
-    exit(1);
-  }
-
-  return msgget(qkey, 0666 | IPC_CREAT);
-}
-
-/**
- * Envio de mensaje a cola
- */
-int32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char proceso) {
-
-  if(strlen(mensaje) > QUEUE_MESAGE_SIZE) {
-    perror("Mensaje muy grande\n");
-    exit(1);
-  }
-  struct msgbuf mensaje_str;
-  mensaje_str.mtype = id_mensaje;
-  sprintf(mensaje_str.mtext, mensaje);
-
-  int32_t qid = get_cola(proceso);
-
-  return msgsnd(qid, &mensaje_str, sizeof mensaje_str.mtext, 0 );
-}
-
-/**
- * Recepcion de mensaje de la cola
- */
-struct msgbuf recibir_de_cola(long id_mensaje, char proceso) {
-  struct msgbuf mensaje_str = {id_mensaje, {0}};
-
-  int32_t qid = get_cola(proceso);
-
-  if(msgrcv(qid, &mensaje_str, sizeof mensaje_str.mtext, id_mensaje, 0) == -1) {
-      perror("Recibiendo mensaje de cola: ");
-      exit(1);
-  }
-  else {
-    return mensaje_str;
-  }
-}
-
-/**
- * Retona el hash md5 del archivo ingresado
- */
-char* get_md5(char* file_path, ssize_t fin) {
-
-    sync();
-
-		FILE* file = fopen(file_path, "rb");	// rb para archivos de no-texto;
-    char* buffer[BUFFER_SIZE];
-    size_t n;
-    unsigned char c[MD5_DIGEST_LENGTH];
-		MD5_CTX mdContext;
-
-    MD5_Init (&mdContext);
-
-    if(fin == 0) {
-		    while (( n = fread (buffer, sizeof(char), sizeof(buffer), file) ) != 0)
-          MD5_Update (&mdContext, buffer, n);
-    }
-    else {
-      ssize_t acumulado = 0;
-      while ( acumulado < fin ) {
-        n = fread (buffer, sizeof(char), sizeof(buffer), file);
-        MD5_Update (&mdContext, buffer, n);
-        acumulado = acumulado + (ssize_t) n;
-      }
-    }
-    MD5_Final (c,&mdContext);
-
-		fclose(file);
-
-    char* md5string = malloc(MD5_DIGEST_LENGTH * 2 + 1);
-    for (int32_t i = 0; i < MD5_DIGEST_LENGTH; ++i)
-      sprintf(&md5string[i * 2], "%02x", (unsigned int)c[i]);
-
-    md5string[strlen(md5string)] = '\0';
-
-		return md5string;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
+#include "../include/mbr_interpreter.h"
 
 Particion* particiones[CANTIDAD_PARTICIONES];
 
@@ -114,12 +9,12 @@ void start_mbr_analisis() {
 		particiones[particion] = malloc(sizeof(Particion));
 		particiones[particion]->index = particion;
 
-		set_mbr_informacion(particion);
-		set_mbr_bootable(particion);
-		set_mbr_tipo(particion);
-		set_mbr_inicio(particion);
-		set_mbr_size(particion);
-		set_mbr_final(particion);
+		set_informacion(particion);
+		set_bootable(particion);
+		set_tipo(particion);
+		set_inicio(particion);
+		set_size(particion);
+		set_final(particion);
 
 		print_particion(particion);
 
@@ -129,7 +24,7 @@ void start_mbr_analisis() {
 
 }
 
-void set_mbr_informacion(int32_t particion) {
+void set_informacion(int32_t particion) {
 	sync();
 
 	FILE* file = fopen( PATH_USB, "rb" );
@@ -153,7 +48,7 @@ void set_mbr_informacion(int32_t particion) {
 	}
 }
 
-void set_mbr_bootable(int32_t particion) {
+void set_bootable(int32_t particion) {
 	char bootable[3];
 
 	bootable[0] = particiones[particion]->informacion[0];
@@ -171,17 +66,17 @@ void set_mbr_bootable(int32_t particion) {
 	sprintf(particiones[particion]->booteable, boot);
 }
 
-void set_mbr_tipo(int32_t particion) {
+void set_tipo(int32_t particion) {
 	particiones[particion]->tipo[0] = particiones[particion]->informacion[8];
 	particiones[particion]->tipo[1] = particiones[particion]->informacion[9];
 	particiones[particion]->tipo[2] = '\0';
 }
 
-void set_mbr_final(int32_t particion) {
+void set_final(int32_t particion) {
 	particiones[particion]->final = particiones[particion]->inicio + particiones[particion]->size - 1;
 }
 
-void set_mbr_inicio(int32_t particion) {
+void set_inicio(int32_t particion) {
 	char inicio[9];
 
 	inicio[0] = particiones[particion]->informacion[22];
@@ -197,7 +92,7 @@ void set_mbr_inicio(int32_t particion) {
 	particiones[particion]->inicio = (int32_t) strtol(inicio, NULL, 16);
 }
 
-void set_mbr_size(int32_t particion) {
+void set_size(int32_t particion) {
 	char size[9];
 
 	size[0] = particiones[particion]->informacion[30];
