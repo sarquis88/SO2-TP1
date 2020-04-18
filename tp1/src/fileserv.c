@@ -1,11 +1,10 @@
-#include "../include/files_service.h"
+#include "../include/fileserv.h"
 
-// definicion de variables
 int32_t newsockfd, qid, sockfd, pid, puerto, qid;
 ssize_t n;
 uint32_t clilen;
 struct sockaddr_in serv_addr, cli_addr;
-Archivo* archivos[CANT_ARCHIVOS];
+Archivo* archivos[CANTIDAD_ARCHIVOS];
 char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE], direccion[16];
 
 /**
@@ -28,7 +27,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 	configurar_socket();
 
 	// levantar base de datos
-	if(conectar()) {
+	if(levantar_archivos()) {
 		sprintf(impresion, "error leyendo archivos\n");
 		imprimir(1);
 		exit(1);
@@ -63,19 +62,19 @@ int32_t main( int32_t argc, char *argv[] ) {
       char* guion = " - ";
       char index[2];
 			char size_archivo[ARCHIVO_NOMBRE_SIZE];
-      for(int32_t i = 0; i < CANT_ARCHIVOS; i++) {
+      for(int32_t i = 0; i < CANTIDAD_ARCHIVOS; i++) {
 				sprintf(size_archivo, "%ld", archivos[i]->size);
 
         size = size + strlen(index) + strlen(guion) * 4 +
         strlen(archivos[i]->nombre) + strlen(archivos[i]->formato) +
 				strlen(archivos[i]->hash) + strlen(size_archivo);
-				if(i < CANT_ARCHIVOS - 1)
+				if(i < CANTIDAD_ARCHIVOS - 1)
         	size = size + strlen(salto);
 			}
 
       char files[size];
       sprintf(files, "%s", primero);
-      for(int32_t i = 0; i < CANT_ARCHIVOS; i++) {
+      for(int32_t i = 0; i < CANTIDAD_ARCHIVOS; i++) {
 
 				char tmp[strlen(files)];
 				sprintf(tmp, "%s", files);
@@ -89,7 +88,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 																								archivos[i]->size,
 																								guion,
 																								archivos[i]->hash);
-				if(i < CANT_ARCHIVOS - 1)
+				if(i < CANTIDAD_ARCHIVOS - 1)
         	strcat(files, salto);
       }
 
@@ -105,7 +104,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 
 			int32_t index_descarga = 0;
 			int32_t flag = 0;
-			for(; index_descarga < CANT_ARCHIVOS; index_descarga++) {
+			for(; index_descarga < CANTIDAD_ARCHIVOS; index_descarga++) {
 				if( strcmp(archivos[index_descarga]->nombre, mensaje_str.mtext) == 0) {
 					flag = 1;
 					break;
@@ -156,10 +155,10 @@ void configurar_socket() {
 }
 
 /**
- * Conexion a base de datos
- * Creacion de usuarios
+ * Levantar archivos de FILES_DIR_NAME
+ * @return -1 en caso de error
  */
-int32_t conectar() {
+int32_t levantar_archivos() {
 
   DIR *dir;
   struct dirent *ent;
@@ -207,13 +206,16 @@ int32_t conectar() {
   else {
 		sprintf(impresion, "error creando archivos\n");
 		imprimir(1);
-    return EXIT_FAILURE;
+    return -1;
   }
 	return 0;
 }
 
 /**
  * Enviar mensaje a cola de mensaje
+ * @param id id de mensaje
+ * @param mensaje mensaje a depositar
+ * @param proceso 'p' para server, 'a' para auth, 'f' para file
  */
 void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 	if(enviar_a_cola(id, mensaje, proceso) == -1) {
@@ -225,6 +227,7 @@ void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 
 /**
  * Imprimir en consola
+ * @param error 1 para imprimir error
  */
 void imprimir(int32_t error) {
 		printf("\33[1;32m");
@@ -250,7 +253,8 @@ void recepcion() {
 }
 
 /**
- * Envia datos por el socket
+ * Envia datos por el socket hacia el cliente
+ * @param mensaje mensaje a enviar
  */
 void enviar_a_cliente(char* mensaje) {
 	n = send( newsockfd, mensaje, strlen(mensaje), 0 );
@@ -263,6 +267,7 @@ void enviar_a_cliente(char* mensaje) {
 
 /**
  * Enviar archivo a cliente
+ * @param index_descarga indice de archivo
  */
 void enviar_archivo(int32_t index_descarga) {
 

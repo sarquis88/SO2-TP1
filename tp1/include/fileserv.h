@@ -3,7 +3,7 @@
 #define SOCKET_PATH "/tmp/file_service"
 #define FILES_DIR_NAME "resources/files/"
 
-int32_t conectar();
+int32_t levantar_archivos();
 void enviar_a_cola_local(long, char*, char);
 void configurar_socket();
 void imprimir(int32_t);

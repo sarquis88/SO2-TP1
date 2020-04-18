@@ -1,6 +1,5 @@
-#include "../include/primary_server.h"
+#include "../include/server.h"
 
-// definicion de variables
 int32_t socket_cliente, qid, sockfd, pid, puerto, salida;
 ssize_t n;
 uint32_t clilen;
@@ -121,7 +120,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 }
 
 /**
- * Levantamiento de socket
+ * Levantamiento y conexion de socket
  */
 void configurar_socket() {
 	sockfd = socket( AF_INET, SOCK_STREAM, 0);
@@ -151,7 +150,8 @@ void recepcion() {
 }
 
 /**
- * Envia datos por el socket
+ * Envia datos por el socket hacia el cliente
+ * @param mensaje mensaje a enviar
  */
 void enviar_a_cliente(char* mensaje) {
 	n = send( socket_cliente, mensaje, strlen(mensaje), 0 );
@@ -163,9 +163,10 @@ void enviar_a_cliente(char* mensaje) {
 }
 
 /**
- * Crea el comando y la opcion recibidos
+ * Crea el comando y la opcion mediante la recepcion del cliente
  * Reaccion a los mensajes recibidos
  * Funcion llamada despues de recepcion()
+ * @param usuario_logueado nombre del usuario
  */
 void parse(char* usuario_logueado) {
 	buffer[strlen(buffer)-1] = '\0';
@@ -211,6 +212,9 @@ void parse(char* usuario_logueado) {
 
 /**
  * Reaccion a comando user
+ * @param usuario nombre de usuario
+ * @param opcion opcion ingresada por el cliente
+ * @param argumento argumento ingresado por el cliente
  */
 void user_command(char* usuario, char *opcion, char *argumento) {
 	if( strcmp("ls", opcion) == 0 )
@@ -225,7 +229,7 @@ void user_command(char* usuario, char *opcion, char *argumento) {
 }
 
 /**
- * Reaccion al comando user ls
+ * Reaccion al comando user ls}
  */
 void user_ls() {
 	enviar_a_cola_local((long) NOMBRES_REQUEST, "n", 'a');
@@ -235,6 +239,8 @@ void user_ls() {
 
 /**
  * Reaccion al comando user passwd
+ * @param usuario nombre del usuario
+ * @param clave clave nueva
  */
 void user_passwd(char* usuario, char* clave) {
 
@@ -256,6 +262,8 @@ void user_passwd(char* usuario, char* clave) {
 
 /**
  * Reaccion a comando file
+ * @param opcion opcion ingresada por el cliente
+ * @param argumento argumento ingresado por el cliente
  */
 void file_command(char *opcion, char *argumento) {
 	if( strcmp("ls", opcion) == 0 )
@@ -280,15 +288,17 @@ void file_ls() {
 
 /**
  * Reaccion al comando file down
+ * @param archivo_nombre
  */
-void file_down(char* archivo_index) {
-	enviar_a_cola_local((long) DESCARGA_REQUEST, archivo_index, 'f');
+void file_down(char* archivo_nombre) {
+	enviar_a_cola_local((long) DESCARGA_REQUEST, archivo_nombre, 'f');
 	char* respuesta = recibir_de_cola(DESCARGA_RESPONSE, 'p').mtext;
 	enviar_a_cliente(respuesta);
 }
 
 /**
  * Reaccion a comando exit
+ * @param usuario nombre de usuario
  */
 void exit_command(char* usuario) {
 	sprintf(impresion, "%s ha salido\n", usuario);
@@ -308,7 +318,10 @@ void unknown_command() {
 }
 
 /**
- * Enviar mensaje a cola de proceso
+ * Enviar mensaje a cola de mensaje
+ * @param id id de mensaje
+ * @param mensaje mensaje a depositar
+ * @param proceso 'p' para server, 'a' para auth, 'f' para file
  */
 void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 	if(enviar_a_cola(id, mensaje, proceso) == -1) {
@@ -320,6 +333,7 @@ void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 
 /**
  * Imprimir en consola
+ * @param error 1 para imprimir error
  */
 void imprimir(int32_t error) {
 		printf("\033[1;34m");

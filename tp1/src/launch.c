@@ -2,6 +2,9 @@
 
 int32_t pid, error;
 
+/**
+ * Funcion main
+ */
 int32_t main( int32_t argc, char *argv[] ) {
 
   // chequeo de argumentos

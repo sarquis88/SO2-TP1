@@ -1,1 +1,1 @@
-./bin/client.o $1 $2
+./bin/client $1 $2

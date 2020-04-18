@@ -1,14 +1,18 @@
 FLAGS= -std=gnu11 -Wall -Werror -pedantic -Wextra -lcrypto -O1 -Wconversion -g
 
 make:
-	gcc $(FLAGS) src/primary_server.c src/utilities.c -o bin/primary_server.o
-	gcc $(FLAGS) src/auth_service.c src/utilities.c -o bin/auth_service.o
-	gcc $(FLAGS) src/files_service.c src/utilities.c -o bin/files_service.o
-	gcc $(FLAGS) src/client.c src/utilities.c -o bin/client.o
-	gcc $(FLAGS) src/launch.c -o bin/launch.o
+	gcc $(FLAGS) src/server.c src/utilities.c -o bin/server
+	gcc $(FLAGS) src/auth.c src/utilities.c -o bin/auth
+	gcc $(FLAGS) src/fileserv.c src/utilities.c -o bin/fileserv
+	gcc $(FLAGS) src/client.c src/utilities.c -o bin/client
+	gcc $(FLAGS) src/launch.c -o bin/launch
 clean:
-	rm bin/primary_server.o
-	rm bin/auth_service.o
-	rm bin/files_service.o
-	rm bin/client.o
-	rm bin/launch.o
+	rm bin/server
+	rm bin/auth
+	rm bin/fileserv
+	rm bin/client
+	rm bin/launch
+	rm -r html/ latex/
+	rm resources/files/*
+docs:
+	doxygen Doxyfile

@@ -8,6 +8,9 @@ struct sockaddr_in serv_addr_file;
 struct hostent *server_primary;
 struct hostent *server_file;
 
+/**
+ * Funcion main
+ */
 int32_t main( int32_t argc, char *argv[] ) {
 
 	// chequeo de argumentos
@@ -23,7 +26,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 	server_file = gethostbyname( argv[1] );
 
 	// configuracion de socket
-	conectar_a_primary();
+	conectar_a_server();
 
 	// activar handler para SIGINT
 	struct sigaction sa;
@@ -76,9 +79,9 @@ int32_t main( int32_t argc, char *argv[] ) {
 }
 
 /**
- * Levantamiento de socket primario
+ * Levantamiento y conexion de socket a server
  */
-void conectar_a_primary() {
+void conectar_a_server() {
 	socket_primary = socket( AF_INET, SOCK_STREAM, 0 );
 	memset( (char *) &serv_addr_primary, '0', sizeof(serv_addr_primary) );
 	serv_addr_primary.sin_family = AF_INET;
@@ -92,7 +95,7 @@ void conectar_a_primary() {
 }
 
 /**
- * Levantamiento de socket file
+ * Levantamiento y conexion de socket a fileserv
  */
 void conectar_a_file() {
 	socket_file = socket( AF_INET, SOCK_STREAM, 0 );
@@ -108,7 +111,8 @@ void conectar_a_file() {
 }
 
 /**
- * Rececpion de datos y guardado en buffer
+ * Rececpion de datos, guardados en buffer
+ * @socket socket en el cual se recibe
  */
 void recepcion(int32_t socket) {
 	memset( buffer, 0, BUFFER_SIZE );
@@ -121,7 +125,7 @@ void recepcion(int32_t socket) {
 
 /**
  * Envio de mensaje a servidor mediante input
- * Si simbolo == 1, se muestra un '>' para escribir
+ * @param simbolo 1 para mostrar '>'
  */
 void escribir_a_servidor(int32_t simbolo) {
 	int32_t salir = 0;
@@ -147,7 +151,9 @@ void escribir_a_servidor(int32_t simbolo) {
 }
 
 /**
- * Envio de mensaje a servidor
+ * Envio de mensaje a socket
+ * @param socket socket a enviar mensaje
+ * @param mensaje mensaje a transmitir
  */
 void enviar_a_socket(int32_t socket, char* mensaje) {
 	n = send( socket, mensaje, strlen(mensaje), 0 );
@@ -159,9 +165,7 @@ void enviar_a_socket(int32_t socket, char* mensaje) {
 
 /**
  * Proceso de inicio de sesion
- * @return	0 para login fallido
- *					1 para login exitoso
- *					9 para usuario bloqueado
+ * @return 0 para login fallido, 1 para login exitoso, 9 para usuario bloqueado
  */
 int32_t logueo() {
 	char usuario[USUARIO_NOMBRE_SIZE];
@@ -195,6 +199,7 @@ int32_t logueo() {
 
 /**
  * Handler de salida del cliente
+ * Llamado al escribir 'exit' en linea de comando o al presionar Ctrl + C
  */
 void salida(int32_t sig) {
 	if(sig > 0) {
@@ -206,7 +211,7 @@ void salida(int32_t sig) {
 }
 
 /**
- * Proceso de descarga de archivo
+ * Proceso de descarga de archivo y almacenado en PATH_USB
  */
 void descargar() {
 

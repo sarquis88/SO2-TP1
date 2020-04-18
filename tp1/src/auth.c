@@ -1,8 +1,7 @@
-#include "../include/auth_service.h"
+#include "../include/auth.h"
 
-// definicion de variables
 int32_t qid;
-Usuario* usuarios[CANT_USUARIOS];
+Usuario* usuarios[CANTIDAD_USUARIOS];
 char impresion[BUFFER_SIZE];
 
 /**
@@ -16,7 +15,7 @@ int32_t main() {
 	imprimir(0);
 
 	// levantar base de datos
-	if(conectar()) {
+	if(levantar_usuarios()) {
 		sprintf(impresion, "error leyendo base de datos\n");
 		imprimir(1);
 		exit(1);
@@ -76,16 +75,16 @@ int32_t main() {
 			char* guion = " - ";
 			char* salto = "\n";
 			char bloqueado[3];
-			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+			for(int32_t i = 0; i < CANTIDAD_USUARIOS; i++) {
 				size = size + strlen(usuarios[i]->nombre) + strlen(guion) * 2 +
 				strlen(usuarios[i]->ultima_conexion) + strlen(bloqueado);
-				if(i < CANT_USUARIOS - 1)
+				if(i < CANTIDAD_USUARIOS - 1)
 					size = size + strlen(salto);
 			}
 
 			char users_info[size];
 			sprintf(users_info, "%s", primero);
-			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+			for(int32_t i = 0; i < CANTIDAD_USUARIOS; i++) {
 
 				if(usuarios[i]->bloqueado[0] == '0')
 					sprintf(bloqueado, "No");
@@ -100,7 +99,7 @@ int32_t main() {
 																						bloqueado,
 																						guion,
 																						usuarios[i]->ultima_conexion);
-				if(i < CANT_USUARIOS - 1)
+				if(i < CANTIDAD_USUARIOS - 1)
 					strcat(users_info, salto);
 			}
 			enviar_a_cola_local((long) NOMBRES_RESPONSE, users_info, 'p');
@@ -111,7 +110,6 @@ int32_t main() {
 		else if(mensaje_str.mtype == CAMBIAR_CLAVE_REQUEST) {
 			sprintf(impresion, "cambiar clave request\n");
 			imprimir(0);
-
 			cambiar_clave(mensaje_str.mtext);
 			enviar_a_cola_local((long) CAMBIAR_CLAVE_RESPONSE, "n", 'p');
 			sprintf(impresion, "cambiar clave response\n");
@@ -123,11 +121,11 @@ int32_t main() {
 
 /**
  * Conexion a base de datos
- * Creacion de usuarios
+ * Creacion de usuarios de acuerdo a lo que hay en resorces/auth_credentials/users_credentials
  */
-int32_t conectar() {
+int32_t levantar_usuarios() {
 
-	char lineas[CANT_USUARIOS * 4][LINE_SIZE];
+	char lineas[CANTIDAD_USUARIOS * 4][LINE_SIZE];
 	FILE *file;
 	file = fopen(CREDENTIALS_FILE_NAME, "r");
 
@@ -144,8 +142,8 @@ int32_t conectar() {
 	else
 		return 1;
 
-	for(int32_t i = 0; i < CANT_USUARIOS * 4;) {
-		int32_t usuario_index = i / CANT_USUARIOS;
+	for(int32_t i = 0; i < CANTIDAD_USUARIOS * 4;) {
+		int32_t usuario_index = i / CANTIDAD_USUARIOS;
 		usuarios[usuario_index] = malloc(sizeof(Usuario));
 
 		sprintf(usuarios[usuario_index]->nombre, "%s", lineas[i++]);
@@ -163,9 +161,11 @@ int32_t conectar() {
 
 /**
  * Bloqueo de usuario
+ * @param nombre_usuario nombre del usuario a bloquear
+ * @return -1 en caso de error
  */
 int32_t bloquear_usuario(char* nombre_usuario) {
-	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+	for(int32_t i = 0; i < CANTIDAD_USUARIOS; i++) {
 		if( strcmp(nombre_usuario, usuarios[i]->nombre) == 0 ) {
 			usuarios[i]->bloqueado[0] = '1';
 			break;
@@ -175,11 +175,11 @@ int32_t bloquear_usuario(char* nombre_usuario) {
 }
 
 /**
- * Cambio de clave a usuario
- * Formato de credenciales_nuevas: "nombre-nueva_clave"
+ * Cambio de clave de usuario
+ * @param credenciales_nuevas "nombre_usuario-clave_nueva"
+ * @return -1 en caso de error
  */
 int32_t cambiar_clave(char* credenciales_nuevas) {
-
 	char* aux = strtok(credenciales_nuevas, "-");
 	char nombre[strlen(aux)];
 	sprintf(nombre, "%s", aux);
@@ -188,9 +188,11 @@ int32_t cambiar_clave(char* credenciales_nuevas) {
 	char nueva_clave[strlen(aux)];
 	sprintf(nueva_clave, "%s", aux);
 
-	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+	for(int32_t i = 0; i < CANTIDAD_USUARIOS; i++) {
 		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {
 			sprintf(usuarios[i]->clave, "%s", nueva_clave);
+			sprintf(impresion, "nueva clave: %s\n", nueva_clave);
+			imprimir(0);
 			break;
 		}
 	}
@@ -198,8 +200,10 @@ int32_t cambiar_clave(char* credenciales_nuevas) {
 }
 
 /**
- * Actualizacion de ultima conexion
+ * Actualizacion de ultima conexion al momento actual
  * Funcion llamada al logearse un usuario
+ * @param usuario nombre de usuario recien conectado
+ * @return -1 en caso de error
  */
 int32_t set_ultima_conexion(char* usuario) {
 
@@ -209,7 +213,7 @@ int32_t set_ultima_conexion(char* usuario) {
   sprintf(nueva_ultima_conexion, "%d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900,
 	 tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
-	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+	for(int32_t i = 0; i < CANTIDAD_USUARIOS; i++) {
 		if( strcmp(usuario, usuarios[i]->nombre) == 0 ) {
 			sprintf(usuarios[i]->ultima_conexion, "%s", nueva_ultima_conexion);
 			break;
@@ -221,9 +225,8 @@ int32_t set_ultima_conexion(char* usuario) {
 /**
  * Proceso de login
  * Se chequea que las credenciales sean las correctas
- * Retorna:	0 -> login fallido
- *					1 -> login exitoso
- *					9 -> usuario bloqueado
+ * @param credenciales "nombre_usuario-clave"
+ * @return 0 para login fallido, 1 para login exitoso, 9 para usuario bloqueado
  */
 int32_t login(char* credenciales) {
 
@@ -237,7 +240,7 @@ int32_t login(char* credenciales) {
 	char clave[strlen(login)];
 	sprintf(clave, "%s", login);
 
-	for(int32_t i = 0; i < CANT_USUARIOS	; i++) {
+	for(int32_t i = 0; i < CANTIDAD_USUARIOS	; i++) {
 		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {
 			if( strcmp(clave, usuarios[i]->clave) == 0 ) {
 				if( strcmp(usuarios[i]->bloqueado, "0") == 0 ) {
@@ -255,6 +258,7 @@ int32_t login(char* credenciales) {
 /**
  * Escritura de datos en base de datos
  * Funcion llamada al cambiar algun dato
+ * @return -1 en caso de error
  */
 int32_t refresh_datos() {
 	FILE *file;
@@ -262,7 +266,7 @@ int32_t refresh_datos() {
 
 	if ( file != NULL ) {
 
-			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
+			for(int32_t i = 0; i < CANTIDAD_USUARIOS; i++) {
 				fputs(usuarios[i]->nombre, file);
 				fputs("\n", file);
 				fputs(usuarios[i]->clave, file);
@@ -277,12 +281,14 @@ int32_t refresh_datos() {
   }
 	else
 		return -1;
-
 	return 0;
 }
 
 /**
  * Enviar mensaje a cola de mensaje
+ * @param id id de mensaje
+ * @param mensaje mensaje a depositar
+ * @param proceso 'p' para server, 'a' para auth, 'f' para file
  */
 void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 	if(enviar_a_cola(id, mensaje, proceso) == -1) {
@@ -294,6 +300,7 @@ void enviar_a_cola_local(long id, char* mensaje, char proceso) {
 
 /**
  * Imprimir en consola
+ * @param error 1 en caso de imprimir error
  */
 void imprimir(int32_t error) {
 		printf("\033[1;31m");
@@ -301,6 +308,6 @@ void imprimir(int32_t error) {
 			fprintf(stderr, "AUTH_SERVICE: %s", impresion );
 		else
 			printf("AUTH_SERVICE: %s", impresion);
-		fflush(stdout);
 		printf("\033[0m");
+		fflush(stdout);
 }

@@ -1,16 +1,19 @@
 #include "../include/utilities.h"
 
+Particion* particiones[CANTIDAD_PARTICIONES];
+
 /**
  * Creacion de cola
- * Retorna el id de la misma (puede ser -1 : error)
+ * @param proceso 'p' para cola server, 'f' para cola fileserv, 'a' para cola auth
+ * @return id cola, -1 para error
  */
 int32_t get_cola(char proceso) {
 
   key_t qkey;
   if( proceso == 'p' )
-    qkey = ftok(PRIMARY_QUEUE_FILE_NAME, PROJ_ID);
+    qkey = ftok(SERVER_QUEUE_FILE_NAME, PROJ_ID);
   else if( proceso == 'f')
-    qkey = ftok(FILE_QUEUE_FILE_NAME, PROJ_ID);
+    qkey = ftok(FILESERV_QUEUE_FILE_NAME, PROJ_ID);
   else if( proceso == 'a')
     qkey = ftok(AUTH_QUEUE_FILE_NAME, PROJ_ID);
   else {
@@ -28,6 +31,9 @@ int32_t get_cola(char proceso) {
 
 /**
  * Envio de mensaje a cola
+ * @param id_mensaje tipo del mensaje
+ * @param mensaje mensaje a enviar
+ * @param proceso 'p' para cola server, 'f' para cola fileserv, 'a' para cola auth
  */
 int32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char proceso) {
 
@@ -46,6 +52,8 @@ int32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char pro
 
 /**
  * Recepcion de mensaje de la cola
+ * @id_mensaje para tipo de mensaje a recibir
+ * @param proceso 'p' para cola server, 'f' para cola fileserv, 'a' para cola auth
  */
 struct msgbuf recibir_de_cola(long id_mensaje, char proceso) {
   struct msgbuf mensaje_str = {id_mensaje, {0}};
@@ -63,6 +71,8 @@ struct msgbuf recibir_de_cola(long id_mensaje, char proceso) {
 
 /**
  * Retona el hash md5 del archivo ingresado
+ * @param file_path direccion del archivo
+ * @param tamaño del archivo, si no es necesario ingresar 0
  */
 char* get_md5(char* file_path, ssize_t fin) {
 
@@ -101,12 +111,9 @@ char* get_md5(char* file_path, ssize_t fin) {
 		return md5string;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-
-Particion* particiones[CANTIDAD_PARTICIONES];
-
+/**
+ * Comienzo de analisis de tabla MBR en PATH_USB
+ */
 void start_mbr_analisis() {
 
 	for(int32_t particion = 0; particion < CANTIDAD_PARTICIONES; particion++) {
@@ -129,6 +136,10 @@ void start_mbr_analisis() {
 
 }
 
+/**
+ * Seteo de bits de informacion a particion
+ * @param particion numero de particion
+ */
 void set_mbr_informacion(int32_t particion) {
 	sync();
 
@@ -153,6 +164,10 @@ void set_mbr_informacion(int32_t particion) {
 	}
 }
 
+/**
+ * Seteo de booteable a particion
+ * @param particion numero de particion
+ */
 void set_mbr_bootable(int32_t particion) {
 	char bootable[3];
 
@@ -171,16 +186,28 @@ void set_mbr_bootable(int32_t particion) {
 	sprintf(particiones[particion]->booteable, "%s", boot);
 }
 
+/**
+ * Seteo de tipo a particion
+ * @param particion numero de particion
+ */
 void set_mbr_tipo(int32_t particion) {
 	particiones[particion]->tipo[0] = particiones[particion]->informacion[8];
 	particiones[particion]->tipo[1] = particiones[particion]->informacion[9];
 	particiones[particion]->tipo[2] = '\0';
 }
 
+/**
+ * Seteo de final a particion
+ * @param particion numero de particion
+ */
 void set_mbr_final(int32_t particion) {
 	particiones[particion]->final = particiones[particion]->inicio + particiones[particion]->size - 1;
 }
 
+/**
+ * Seteo de inicio a particion
+ * @param particion numero de particion
+ */
 void set_mbr_inicio(int32_t particion) {
 	char inicio[9];
 
@@ -197,6 +224,10 @@ void set_mbr_inicio(int32_t particion) {
 	particiones[particion]->inicio = (int32_t) strtol(inicio, NULL, 16);
 }
 
+/**
+ * Seteo de tamaño a particion
+ * @param particion numero de particion
+ */
 void set_mbr_size(int32_t particion) {
 	char size[9];
 
@@ -214,6 +245,10 @@ void set_mbr_size(int32_t particion) {
 
 }
 
+/**
+ * Impresion en consola de informacion acerca de particion
+ * @param particion numero de particion
+ */
 void print_particion(int32_t particion) {
 
 	if(particiones[particion]->size > 0) {
