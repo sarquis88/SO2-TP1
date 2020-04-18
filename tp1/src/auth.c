@@ -74,7 +74,7 @@ int32_t main() {
 			size_t size = strlen(primero);
 			char* guion = " - ";
 			char* salto = "\n";
-			char bloqueado[3];
+			char bloqueado[3] = "";
 			for(int32_t i = 0; i < CANTIDAD_USUARIOS; i++) {
 				size = size + strlen(usuarios[i]->nombre) + strlen(guion) * 2 +
 				strlen(usuarios[i]->ultima_conexion) + strlen(bloqueado);

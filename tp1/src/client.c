@@ -172,10 +172,10 @@ int32_t logueo() {
 	char clave[USUARIO_CLAVE_SIZE];
 
 	printf("Usuario: ");
-	fgets( usuario, BUFFER_SIZE, stdin );
+	fgets( usuario, USUARIO_NOMBRE_SIZE, stdin );
 	usuario[strlen(usuario) - 1] = '\0';
 	printf("Clave: ");
-	fgets( clave, BUFFER_SIZE, stdin );
+	fgets( clave, USUARIO_CLAVE_SIZE, stdin );
 	clave[strlen(clave) - 1] = '\0';
 
 	// formato de login: "usuario-clave"

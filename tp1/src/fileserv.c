@@ -60,7 +60,7 @@ int32_t main( int32_t argc, char *argv[] ) {
       size_t size = strlen(primero);
       char* salto = "\n";
       char* guion = " - ";
-      char index[2];
+      char index[2] = "";
 			char size_archivo[ARCHIVO_NOMBRE_SIZE];
       for(int32_t i = 0; i < CANTIDAD_ARCHIVOS; i++) {
 				sprintf(size_archivo, "%ld", archivos[i]->size);
