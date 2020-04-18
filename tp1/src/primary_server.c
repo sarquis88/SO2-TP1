@@ -20,7 +20,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 	}
 
 	// definicion de puerto y direccion
-	sprintf(direccion, argv[1]);
+	sprintf(direccion, "%s", argv[1]);
 	puerto = atoi( argv[2] );
 
 	// levantamiento de socket
@@ -90,7 +90,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 				}
 			}
 			else if(respuesta[0] == '1') {
-				sprintf(user_logueado, strtok(buffer, "-"));
+				sprintf(user_logueado, "%s", strtok(buffer, "-"));
 				sprintf(impresion, "nuevo cliente: %s\n", user_logueado);
 				imprimir(0);
 				enviar_a_cliente("1");
@@ -182,15 +182,15 @@ void parse(char* usuario_logueado) {
 
 	while(mensaje != NULL) {
 		if(i == 0) {
-			sprintf(comando, mensaje);
+			sprintf(comando, "%s", mensaje);
 			i++;
 		}
 		else if(i == 1) {
-			sprintf(opcion, mensaje);
+			sprintf(opcion, "%s", mensaje);
 			i++;
 		}
 		else {
-			sprintf(argumento, mensaje)	;
+			sprintf(argumento, "%s", mensaje)	;
 			break;
 		}
 		mensaje = strtok(NULL, " ");

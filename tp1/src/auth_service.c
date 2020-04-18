@@ -84,7 +84,7 @@ int32_t main() {
 			}
 
 			char users_info[size];
-			sprintf(users_info, primero);
+			sprintf(users_info, "%s", primero);
 			for(int32_t i = 0; i < CANT_USUARIOS; i++) {
 
 				if(usuarios[i]->bloqueado[0] == '0')
@@ -93,7 +93,7 @@ int32_t main() {
 					sprintf(bloqueado, "Si");
 
 				char tmp[strlen(users_info)];
-				sprintf(tmp, users_info);
+				sprintf(tmp, "%s", users_info);
 				sprintf(users_info, "%s%s%s%s%s%s",	tmp,
 																						usuarios[i]->nombre,
 																						guion,
@@ -136,7 +136,7 @@ int32_t conectar() {
 
 			int32_t index = 0;
       while ( fgets( line, LINE_SIZE, file ) != NULL ) {
-				sprintf(lineas[index], line);
+				sprintf(lineas[index], "%s", line);
 				index++;
       }
       fclose ( file );
@@ -148,13 +148,13 @@ int32_t conectar() {
 		int32_t usuario_index = i / CANT_USUARIOS;
 		usuarios[usuario_index] = malloc(sizeof(Usuario));
 
-		sprintf(usuarios[usuario_index]->nombre, lineas[i++]);
+		sprintf(usuarios[usuario_index]->nombre, "%s", lineas[i++]);
 		usuarios[usuario_index]->nombre[strlen(usuarios[usuario_index]->nombre) - 1] = '\0';
-		sprintf(usuarios[usuario_index]->clave, lineas[i++]);
+		sprintf(usuarios[usuario_index]->clave, "%s", lineas[i++]);
 		usuarios[usuario_index]->clave[strlen(usuarios[usuario_index]->clave) - 1] = '\0';
-		sprintf(usuarios[usuario_index]->bloqueado, lineas[i++]);
+		sprintf(usuarios[usuario_index]->bloqueado, "%s", lineas[i++]);
 		usuarios[usuario_index]->bloqueado[strlen(usuarios[usuario_index]->bloqueado) - 1] = '\0';
-		sprintf(usuarios[usuario_index]->ultima_conexion, lineas[i++]);
+		sprintf(usuarios[usuario_index]->ultima_conexion, "%s", lineas[i++]);
 		usuarios[usuario_index]->ultima_conexion[strlen(usuarios[usuario_index]->ultima_conexion) - 1] = '\0';
 	}
 
@@ -182,15 +182,15 @@ int32_t cambiar_clave(char* credenciales_nuevas) {
 
 	char* aux = strtok(credenciales_nuevas, "-");
 	char nombre[strlen(aux)];
-	sprintf(nombre, aux);
+	sprintf(nombre, "%s", aux);
 
 	aux = strtok(NULL, "\0");
 	char nueva_clave[strlen(aux)];
-	sprintf(nueva_clave, aux);
+	sprintf(nueva_clave, "%s", aux);
 
 	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
 		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {
-			sprintf(usuarios[i]->clave, nueva_clave);
+			sprintf(usuarios[i]->clave, "%s", nueva_clave);
 			break;
 		}
 	}
@@ -211,7 +211,7 @@ int32_t set_ultima_conexion(char* usuario) {
 
 	for(int32_t i = 0; i < CANT_USUARIOS; i++) {
 		if( strcmp(usuario, usuarios[i]->nombre) == 0 ) {
-			sprintf(usuarios[i]->ultima_conexion, nueva_ultima_conexion);
+			sprintf(usuarios[i]->ultima_conexion, "%s", nueva_ultima_conexion);
 			break;
 		}
 	}
@@ -231,11 +231,11 @@ int32_t login(char* credenciales) {
 
 	login = strtok(credenciales, "-");
 	char nombre[strlen(login)];
-	sprintf(nombre, login);
+	sprintf(nombre, "%s", login);
 
 	login = strtok(NULL, "-");
 	char clave[strlen(login)];
-	sprintf(clave, login);
+	sprintf(clave, "%s", login);
 
 	for(int32_t i = 0; i < CANT_USUARIOS	; i++) {
 		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {

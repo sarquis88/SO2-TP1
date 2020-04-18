@@ -21,7 +21,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 	}
 
 	// definicion de puerto y direccion
-	sprintf(direccion, argv[1]);
+	sprintf(direccion, "%s", argv[1]);
 	puerto = atoi( argv[2] ) + 1;
 
 	// configuracion de socket
@@ -74,11 +74,11 @@ int32_t main( int32_t argc, char *argv[] ) {
 			}
 
       char files[size];
-      sprintf(files, primero);
+      sprintf(files, "%s", primero);
       for(int32_t i = 0; i < CANT_ARCHIVOS; i++) {
 
 				char tmp[strlen(files)];
-				sprintf(tmp, files);
+				sprintf(tmp, "%s", files);
         sprintf(files, "%s%d%s%s%s%s%s%ld%s%s", 	tmp,
 																								archivos[i]->index,
 																								guion,
@@ -103,21 +103,23 @@ int32_t main( int32_t argc, char *argv[] ) {
 			sprintf(impresion, "descarga request\n");
 			imprimir(0);
 
-			int32_t index_descarga = atoi(mensaje_str.mtext);
+			int32_t index_descarga = 0;
 			int32_t flag = 0;
-			for(int32_t i = 0; i < CANT_ARCHIVOS; i++) {
-				if(archivos[i]->index == index_descarga) {
+			for(; index_descarga < CANT_ARCHIVOS; index_descarga++) {
+				if( strcmp(archivos[index_descarga]->nombre, mensaje_str.mtext) == 0) {
 					flag = 1;
 					break;
 				}
 			}
 
-			sprintf(impresion, "descarga response\n");
-			imprimir(0);
-
-			if(flag == 0)
+			if(flag == 0) {
+				sprintf(impresion, "descarga response: negativa\n");
+				imprimir(0);
 				enviar_a_cola_local((long) DESCARGA_RESPONSE, "descarga_no", 'p');
+			}
 			else {
+				sprintf(impresion, "descarga response: positiva\n");
+				imprimir(0);
 				enviar_a_cola_local((long) DESCARGA_RESPONSE, "descarga_si", 'p');
 
 				// empezar a escuchar
@@ -175,9 +177,9 @@ int32_t conectar() {
 				path[strlen(path)] = '\0';
 
         archivos[index]->index = index;
-    		sprintf(archivos[index]->nombre, strtok(ent->d_name, "."));
+    		sprintf(archivos[index]->nombre, "%s", strtok(ent->d_name, "."));
     		archivos[index]->nombre[strlen(archivos[index]->nombre)] = '\0';
-    		sprintf(archivos[index]->formato, strtok(NULL, "."));
+    		sprintf(archivos[index]->formato, "%s", strtok(NULL, "."));
     		archivos[index]->formato[strlen(archivos[index]->formato)] = '\0';
 
 				FILE* file = fopen(path, "rb");
@@ -193,7 +195,7 @@ int32_t conectar() {
 					fclose(file);
 				}
 
-				sprintf(archivos[index]->hash, get_md5(path, 0));
+				sprintf(archivos[index]->hash, "%s", get_md5(path, 0));
         index++;
 
 				sprintf(impresion, "configuracion terminada\n");

@@ -62,7 +62,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 			recepcion(socket_primary);
 
 			if( strcmp(buffer, "descarga_no") == 0)
-				printf("\nIndice de archivo no encontrado\n");
+				printf("Indice de archivo no encontrado\n");
 			else if( strcmp(buffer, "descarga_si") == 0) {
 				descargar();
 			}
@@ -217,7 +217,7 @@ void descargar() {
 	recepcion(socket_file);
 
 	char nombre_archivo[strlen(buffer)];
-	sprintf(nombre_archivo, buffer);
+	sprintf(nombre_archivo, "%s", buffer);
 	nombre_archivo[strlen(nombre_archivo)] = '\0';
 
 	printf("Empezando descarga de %s\n", nombre_archivo);

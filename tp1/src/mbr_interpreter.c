@@ -63,7 +63,7 @@ void set_bootable(int32_t particion) {
 	else
 		sprintf(boot, "Er");
 
-	sprintf(particiones[particion]->booteable, boot);
+	sprintf(particiones[particion]->booteable, "%s", boot);
 }
 
 void set_tipo(int32_t particion) {

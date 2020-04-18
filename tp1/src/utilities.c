@@ -37,7 +37,7 @@ int32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char pro
   }
   struct msgbuf mensaje_str;
   mensaje_str.mtype = id_mensaje;
-  sprintf(mensaje_str.mtext, mensaje);
+  sprintf(mensaje_str.mtext, "%s", mensaje);
 
   int32_t qid = get_cola(proceso);
 
@@ -168,7 +168,7 @@ void set_mbr_bootable(int32_t particion) {
 	else
 		sprintf(boot, "Er");
 
-	sprintf(particiones[particion]->booteable, boot);
+	sprintf(particiones[particion]->booteable, "%s", boot);
 }
 
 void set_mbr_tipo(int32_t particion) {
