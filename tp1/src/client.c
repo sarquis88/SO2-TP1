@@ -65,7 +65,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 			recepcion(socket_primary);
 
 			if( strcmp(buffer, "descarga_no") == 0)
-				printf("Indice de archivo no encontrado\n");
+				printf("Nombre de archivo no encontrado\n");
 			else if( strcmp(buffer, "descarga_si") == 0) {
 				descargar();
 			}
@@ -89,7 +89,7 @@ void conectar_a_server() {
 	serv_addr_primary.sin_port = htons( (uint16_t) puerto_primary );
 
 	if ( connect( socket_primary, (struct sockaddr *)&serv_addr_primary, sizeof(serv_addr_primary ) ) < 0 ) {
-		perror( "CLIENTE: Error: conexion a primary" );
+		perror( "error conectando a server" );
 		exit( 1 );
 	}
 }
@@ -105,7 +105,7 @@ void conectar_a_file() {
 	serv_addr_file.sin_port = htons( (uint16_t) puerto_file );
 
 	if ( connect( socket_file, (struct sockaddr *)&serv_addr_file, sizeof(serv_addr_file ) ) < 0 ) {
-		perror( "CLIENTE: Error: conexion a file" );
+		perror( "error conectando a fileserv" );
 		exit( 1 );
 	}
 }
@@ -118,7 +118,7 @@ void recepcion(int32_t socket) {
 	memset( buffer, 0, BUFFER_SIZE );
 	n = recv( socket, buffer, BUFFER_SIZE, 0 );
 	if ( n < 0 ) {
-	  perror( "CLIENTE: Error: lectura de socket" );
+	  perror( "error leyendo de socket" );
 	  exit(1);
 	}
 }
@@ -141,7 +141,7 @@ void escribir_a_servidor(int32_t simbolo) {
 		if(buffer[0] != 10) {
 			n = send( socket_primary, buffer, strlen(buffer), 0 );
 			if ( n < 0 ) {
-			  perror( "CLIENTE: Error: envio a socket\n");
+			  perror( "error enviando a socket\n");
 			  exit( 1 );
 			}
 			else
@@ -158,7 +158,7 @@ void escribir_a_servidor(int32_t simbolo) {
 void enviar_a_socket(int32_t socket, char* mensaje) {
 	n = send( socket, mensaje, strlen(mensaje), 0 );
 	if ( n < 0 ) {
-	  perror( "CLIENTE: Error: envio a socket\n");
+	  perror( "error enviando a socket\n");
 	  exit( 1 );
 	}
 }
@@ -171,21 +171,30 @@ int32_t logueo() {
 	char usuario[USUARIO_NOMBRE_SIZE];
 	char clave[USUARIO_CLAVE_SIZE];
 
-	printf("Usuario: ");
-	fgets( usuario, USUARIO_NOMBRE_SIZE, stdin );
+	do {
+		printf("Usuario: ");
+		fgets( usuario, USUARIO_NOMBRE_SIZE, stdin );
+	} while(usuario[0] == '\n');
 	usuario[strlen(usuario) - 1] = '\0';
-	printf("Clave: ");
-	fgets( clave, USUARIO_CLAVE_SIZE, stdin );
+
+	do {
+		printf("Clave: ");
+		fgets( clave, USUARIO_CLAVE_SIZE, stdin );
+	} while(clave[0] == '\n');
 	clave[strlen(clave) - 1] = '\0';
 
 	// formato de login: "usuario-clave"
 	char* sep = "-";
-	char login[strlen(usuario) + strlen(clave) + strlen(sep)];
+	char* login = malloc(strlen(usuario) + strlen(clave) + strlen(sep));
+	if(login == NULL) {
+		perror("error alocando memoria en login\n");
+		exit(1);
+	}
 	sprintf(login, "%s%s%s", usuario, sep, clave);
 
 	// envio de credenciales a servidor
 	enviar_a_socket(socket_primary, login);
-
+	free(login);
 	// respuesta del servidor
 	recepcion(socket_primary);
 
@@ -244,7 +253,7 @@ void descargar() {
 		fflush(stdout);
   }
 	else {
-      perror("CLIENTE: error creando archivo de descarga\n");
+      perror("error creando archivo de descarga\n");
 			printf("%s\n", PATH_USB);
 			exit(1);
   }

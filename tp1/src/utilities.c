@@ -4,25 +4,15 @@ Particion* particiones[CANTIDAD_PARTICIONES];
 
 /**
  * Creacion de cola
- * @param proceso 'p' para cola server, 'f' para cola fileserv, 'a' para cola auth
  * @return id cola, -1 para error
  */
-int32_t get_cola(char proceso) {
+int32_t get_cola() {
 
   key_t qkey;
-  if( proceso == 'p' )
-    qkey = ftok(SERVER_QUEUE_FILE_NAME, PROJ_ID);
-  else if( proceso == 'f')
-    qkey = ftok(FILESERV_QUEUE_FILE_NAME, PROJ_ID);
-  else if( proceso == 'a')
-    qkey = ftok(AUTH_QUEUE_FILE_NAME, PROJ_ID);
-  else {
-    printf("Error obteniendo token: proceso desconocido\n");
-    exit(1);
-  }
+  qkey = ftok(QUEUE_FILE_NAME, PROJ_ID);
 
   if (qkey == -1) {
-    perror("Obteniendo token: ");
+    perror("error bteniendo token");
     exit(1);
   }
 
@@ -33,40 +23,39 @@ int32_t get_cola(char proceso) {
  * Envio de mensaje a cola
  * @param id_mensaje tipo del mensaje
  * @param mensaje mensaje a enviar
- * @param proceso 'p' para cola server, 'f' para cola fileserv, 'a' para cola auth
  */
-int32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE], char proceso) {
+int32_t enviar_a_cola(long id_mensaje, char mensaje[QUEUE_MESAGE_SIZE]) {
 
   if(strlen(mensaje) > QUEUE_MESAGE_SIZE) {
-    perror("Mensaje muy grande\n");
+    perror("error, mensaje muy grande\n");
     exit(1);
   }
   struct msgbuf mensaje_str;
   mensaje_str.mtype = id_mensaje;
   sprintf(mensaje_str.mtext, "%s", mensaje);
 
-  int32_t qid = get_cola(proceso);
-
-  return msgsnd(qid, &mensaje_str, sizeof mensaje_str.mtext, 0 );
+  return msgsnd(get_cola(), &mensaje_str, sizeof mensaje_str.mtext, 0 );
 }
 
 /**
  * Recepcion de mensaje de la cola
  * @id_mensaje para tipo de mensaje a recibir
- * @param proceso 'p' para cola server, 'f' para cola fileserv, 'a' para cola auth
+ * @flag flag para recepcion
+ * @return mensaje de cola
  */
-struct msgbuf recibir_de_cola(long id_mensaje, char proceso) {
+char* recibir_de_cola(long id_mensaje, int32_t flag) {
+  errno = 0;
   struct msgbuf mensaje_str = {id_mensaje, {0}};
 
-  int32_t qid = get_cola(proceso);
-
-  if(msgrcv(qid, &mensaje_str, sizeof mensaje_str.mtext, id_mensaje, 0) == -1) {
-      perror("Recibiendo mensaje de cola: ");
-      exit(1);
+  if(msgrcv(get_cola(), &mensaje_str, sizeof mensaje_str.mtext, id_mensaje, flag) == -1) {
+      if(errno != ENOMSG) {
+        perror("error recibiendo mensaje de cola");
+        exit(1);
+      }
   }
-  else {
-    return mensaje_str;
-  }
+  char* mensaje = malloc(strlen(mensaje_str.mtext));
+  sprintf(mensaje, mensaje_str.mtext);
+  return mensaje;
 }
 
 /**
@@ -103,6 +92,10 @@ char* get_md5(char* file_path, ssize_t fin) {
 		fclose(file);
 
     char* md5string = malloc(MD5_DIGEST_LENGTH * 2 + 1);
+    if(md5string == NULL) {
+			perror("error alocando memoria en md5string\n");
+			exit(1);
+		}
     for (int32_t i = 0; i < MD5_DIGEST_LENGTH; ++i)
       sprintf(&md5string[i * 2], "%02x", (unsigned int)c[i]);
 
@@ -119,6 +112,10 @@ void start_mbr_analisis() {
 	for(int32_t particion = 0; particion < CANTIDAD_PARTICIONES; particion++) {
 
 		particiones[particion] = malloc(sizeof(Particion));
+    if(particiones[particion] == NULL) {
+			perror("error alocando memoria en Particion\n");
+			exit(1);
+		}
 		particiones[particion]->index = particion;
 
 		set_mbr_informacion(particion);
@@ -201,7 +198,8 @@ void set_mbr_tipo(int32_t particion) {
  * @param particion numero de particion
  */
 void set_mbr_final(int32_t particion) {
-	particiones[particion]->final = particiones[particion]->inicio + particiones[particion]->size - 1;
+	particiones[particion]->final = particiones[particion]->inicio +
+   (particiones[particion]->size) * 2048 - 1;
 }
 
 /**
@@ -273,4 +271,15 @@ void print_particion(int32_t particion) {
 		printf("Final de particion: %d\n", particiones[particion]->final);
 		printf("Tamaño de particion: %d [MB]\n", particiones[particion]->size);
 	}
+}
+
+/**
+ * Duerme al hilo durante NSEC_TIME + SEC_TIME
+ */
+void dormir() {
+  struct timespec time;
+  time.tv_sec = SEC_TIME;
+  time.tv_nsec = NSEC_TIME;
+  if(nanosleep(&time ,NULL) < 0)
+    perror("error durmiendo");
 }

@@ -3,6 +3,7 @@
 int32_t qid;
 Usuario* usuarios[CANTIDAD_USUARIOS];
 char impresion[BUFFER_SIZE];
+char* mensaje_str;
 
 /**
  * Funcion main
@@ -21,29 +22,42 @@ int32_t main() {
 		exit(1);
 	}
 
-	// creacion de cola
-	qid = get_cola('a');
-	if(qid == -1) {
-		sprintf(impresion, "error creando la cola\n");
-		imprimir(1);
-		exit(1);
-	}
-	sprintf(impresion, "cola = %d\n", qid);
-	imprimir(0);
+	mensaje_str = malloc(QUEUE_MESAGE_SIZE);
 
 	// empezar a escuchar mensajes en cola
   while(1) {
 
-		// recibir cualquier tipo de mensajes
-		struct msgbuf mensaje_str = recibir_de_cola((long) 0, 'a');
+		/*
+				Intento recibir un mensaje del tipo LOGIN_REQUEST con IPC_NOWAIT. Si
+				hay un mensaje en la cola, lo leo. Si no hay ningun mensaje en la cola,
+				errno se setea en	ENOMSG y sigo con la ejecucion.
+				Luego repito para todos los tipos de mensajes.
+		*/
 
-		// handler para login request
-		if(mensaje_str.mtype == LOGIN_REQUEST) {
-			sprintf(impresion, "login request: %s\n", mensaje_str.mtext);
+		mensaje_str = recibir_de_cola((long) LOGIN_REQUEST, MSG_NOERROR | IPC_NOWAIT);
+		if(errno != ENOMSG) {
+			// handler para login request
+			sprintf(impresion, "login request: %s\n", mensaje_str);
 			imprimir(0);
-			int32_t log = login(mensaje_str.mtext);
 
-			char rta[2];
+			char* credenciales = malloc(strlen(mensaje_str));
+			if(credenciales == NULL) {
+				sprintf(impresion, "error alocando memoria en credenciales\n");
+				imprimir(1);
+				exit(1);
+			}
+			sprintf(credenciales, "%s", mensaje_str);
+
+			int32_t log = login(credenciales);
+
+			free(credenciales);
+
+			char* rta = malloc(2);
+			if(rta == NULL) {
+				sprintf(impresion, "error alocando memoria en rta\n");
+				imprimir(1);
+				exit(1);
+			}
 			if(log == 0)
 				sprintf(rta, "0");
 			else if(log == 1)
@@ -51,22 +65,37 @@ int32_t main() {
 			else if(log == 9)
 				sprintf(rta, "9");
 
-			enviar_a_cola_local((long) LOGIN_RESPONSE, rta, 'p');
+			enviar_a_cola_local((long) LOGIN_RESPONSE, rta);
 			sprintf(impresion, "login response (rta: %s)\n", rta);
 			imprimir(0);
+			free(rta);
 		}
-		// handler para bloquear usuario
-		else if(mensaje_str.mtype == BLOQUEAR_USUARIO) {
-			sprintf(impresion, "bloquear usuario: %s\n", mensaje_str.mtext);
+
+		mensaje_str = recibir_de_cola((long) BLOQUEAR_USUARIO, MSG_NOERROR | IPC_NOWAIT);
+		if(errno != ENOMSG) {
+			// handler para bloquear usuario
+			sprintf(impresion, "bloquear usuario: %s\n", mensaje_str);
 			imprimir(0);
-			if(bloquear_usuario(mensaje_str.mtext) == -1) {
+
+			char* usuario_a_bloquear = malloc(strlen(mensaje_str));
+			if(usuario_a_bloquear == NULL) {
+				sprintf(impresion, "error alocando memoria en usuario_a_bloquear\n");
+				imprimir(1);
+				exit(1);
+			}
+			sprintf(usuario_a_bloquear, "%s", mensaje_str);
+
+			if(bloquear_usuario(usuario_a_bloquear) == -1) {
 				sprintf(impresion, "error bloqueando usuario\n");
 				imprimir(1);
 				exit(1);
 			}
+			free(usuario_a_bloquear);
 		}
-		// handler para nombre request
-		else if(mensaje_str.mtype == NOMBRES_REQUEST) {
+
+		mensaje_str = recibir_de_cola((long) NOMBRES_REQUEST, MSG_NOERROR | IPC_NOWAIT);
+		if(errno != ENOMSG) {
+			// handler para nombre request
 			sprintf(impresion, "nombres request\n");
 			imprimir(0);
 
@@ -82,7 +111,12 @@ int32_t main() {
 					size = size + strlen(salto);
 			}
 
-			char users_info[size];
+			char* users_info = malloc(size);
+			if(users_info == NULL) {
+				sprintf(impresion, "error alocando memoria en users_info\n");
+				imprimir(1);
+				exit(1);
+			}
 			sprintf(users_info, "%s", primero);
 			for(int32_t i = 0; i < CANTIDAD_USUARIOS; i++) {
 
@@ -102,19 +136,36 @@ int32_t main() {
 				if(i < CANTIDAD_USUARIOS - 1)
 					strcat(users_info, salto);
 			}
-			enviar_a_cola_local((long) NOMBRES_RESPONSE, users_info, 'p');
+			enviar_a_cola_local((long) NOMBRES_RESPONSE, users_info);
 			sprintf(impresion, "nombres response\n");
 			imprimir(0);
+			free(users_info);
 		}
-		// handler para cambiar contraseña request
-		else if(mensaje_str.mtype == CAMBIAR_CLAVE_REQUEST) {
+
+		mensaje_str = recibir_de_cola((long) CAMBIAR_CLAVE_REQUEST, MSG_NOERROR | IPC_NOWAIT);
+		if(errno != ENOMSG) {
+			// handler para cambiar contraseña request
 			sprintf(impresion, "cambiar clave request\n");
 			imprimir(0);
-			cambiar_clave(mensaje_str.mtext);
-			enviar_a_cola_local((long) CAMBIAR_CLAVE_RESPONSE, "n", 'p');
+
+			char* nuevas_credenciales = malloc(strlen(mensaje_str));
+			if(nuevas_credenciales == NULL) {
+				sprintf(impresion, "error alocando memoria en nuevas_credenciales\n");
+				imprimir(1);
+				exit(1);
+			}
+			sprintf(nuevas_credenciales, "%s", mensaje_str);
+
+			cambiar_clave(nuevas_credenciales);
+
+			free(nuevas_credenciales);
+
+			enviar_a_cola_local((long) CAMBIAR_CLAVE_RESPONSE, "n");
 			sprintf(impresion, "cambiar clave response\n");
 			imprimir(0);
 		}
+
+		dormir();
 	}
 	exit(0);
 }
@@ -145,6 +196,11 @@ int32_t levantar_usuarios() {
 	for(int32_t i = 0; i < CANTIDAD_USUARIOS * 4;) {
 		int32_t usuario_index = i / CANTIDAD_USUARIOS;
 		usuarios[usuario_index] = malloc(sizeof(Usuario));
+		if(usuarios[usuario_index] == NULL) {
+			sprintf(impresion, "error alocando memoria en Usuario\n");
+			imprimir(1);
+			exit(1);
+		}
 
 		sprintf(usuarios[usuario_index]->nombre, "%s", lineas[i++]);
 		usuarios[usuario_index]->nombre[strlen(usuarios[usuario_index]->nombre) - 1] = '\0';
@@ -244,7 +300,7 @@ int32_t login(char* credenciales) {
 		if( strcmp(nombre, usuarios[i]->nombre) == 0 ) {
 			if( strcmp(clave, usuarios[i]->clave) == 0 ) {
 				if( strcmp(usuarios[i]->bloqueado, "0") == 0 ) {
-					set_ultima_conexion(nombre);
+					set_ultima_conexion(usuarios[i]->nombre);
 					return 1;
 				}
 				else
@@ -288,10 +344,9 @@ int32_t refresh_datos() {
  * Enviar mensaje a cola de mensaje
  * @param id id de mensaje
  * @param mensaje mensaje a depositar
- * @param proceso 'p' para server, 'a' para auth, 'f' para file
  */
-void enviar_a_cola_local(long id, char* mensaje, char proceso) {
-	if(enviar_a_cola(id, mensaje, proceso) == -1) {
+void enviar_a_cola_local(long id, char* mensaje) {
+	if(enviar_a_cola(id, mensaje) == -1) {
 		sprintf(impresion, "error enviando mensaje\n");
 		imprimir(1);
 		exit(1);

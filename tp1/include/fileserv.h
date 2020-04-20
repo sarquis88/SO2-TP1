@@ -4,7 +4,7 @@
 #define FILES_DIR_NAME "resources/files/"
 
 int32_t levantar_archivos();
-void enviar_a_cola_local(long, char*, char);
+void enviar_a_cola_local(long, char*);
 void configurar_socket();
 void imprimir(int32_t);
 void enviar_a_cliente(char*);

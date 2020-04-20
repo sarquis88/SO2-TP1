@@ -6,6 +6,7 @@ uint32_t clilen;
 struct sockaddr_in serv_addr, cli_addr;
 Archivo* archivos[CANTIDAD_ARCHIVOS];
 char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE], direccion[16];
+char* mensaje_str;
 
 /**
  * Funcion main
@@ -33,26 +34,24 @@ int32_t main( int32_t argc, char *argv[] ) {
 		exit(1);
 	}
 
-	// creacion de cola
-	qid = get_cola('f');
-	if(qid == -1) {
-		sprintf(impresion, "error creando cola\n");
-		imprimir(1);
-		exit(1);
-	}
-	sprintf(impresion, "cola = %d\n", qid);
-	imprimir(0);
-
 	// empezar a escuchar mensajes en cola y por socket
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
+
+	mensaje_str = malloc(QUEUE_MESAGE_SIZE);
+
   while(1) {
 
-		// recibir cualquier tipo de mensajes
-		struct msgbuf mensaje_str = recibir_de_cola((long) 0, 'f');
+		/*
+				Intento recibir un mensaje del tipo ARCHIVOS_REQUEST con IPC_NOWAIT. Si
+				hay un mensaje en la cola, lo leo. Si no hay ningun mensaje en la cola,
+				errno se setea en	ENOMSG y sigo con la ejecucion.
+				Luego repito para todos los tipos de mensajes.
+		*/
 
-    // handler para archivos request
-		if(mensaje_str.mtype == ARCHIVOS_REQUEST) {
+		mensaje_str = recibir_de_cola((long) ARCHIVOS_REQUEST, MSG_NOERROR | IPC_NOWAIT);
+		if(errno != ENOMSG) {
+  		// handler para archivos request
 			sprintf(impresion, "archivos request\n");
 			imprimir(0);
 
@@ -92,20 +91,21 @@ int32_t main( int32_t argc, char *argv[] ) {
         	strcat(files, salto);
       }
 
-			enviar_a_cola_local((long) ARCHIVOS_RESPONSE, files, 'p');
+			enviar_a_cola_local((long) ARCHIVOS_RESPONSE, files);
 			sprintf(impresion, "archivos response\n");
 			imprimir(0);
 		}
 
-		// handler para descarga request
-		if(mensaje_str.mtype == DESCARGA_REQUEST) {
+		mensaje_str = recibir_de_cola((long) DESCARGA_REQUEST, MSG_NOERROR | IPC_NOWAIT);
+		if(errno != ENOMSG) {
+			// handler para descarga request
 			sprintf(impresion, "descarga request\n");
 			imprimir(0);
 
 			int32_t index_descarga = 0;
 			int32_t flag = 0;
 			for(; index_descarga < CANTIDAD_ARCHIVOS; index_descarga++) {
-				if( strcmp(archivos[index_descarga]->nombre, mensaje_str.mtext) == 0) {
+				if( strcmp(archivos[index_descarga]->nombre, mensaje_str) == 0) {
 					flag = 1;
 					break;
 				}
@@ -114,12 +114,12 @@ int32_t main( int32_t argc, char *argv[] ) {
 			if(flag == 0) {
 				sprintf(impresion, "descarga response: negativa\n");
 				imprimir(0);
-				enviar_a_cola_local((long) DESCARGA_RESPONSE, "descarga_no", 'p');
+				enviar_a_cola_local((long) DESCARGA_RESPONSE, "descarga_no");
 			}
 			else {
 				sprintf(impresion, "descarga response: positiva\n");
 				imprimir(0);
-				enviar_a_cola_local((long) DESCARGA_RESPONSE, "descarga_si", 'p');
+				enviar_a_cola_local((long) DESCARGA_RESPONSE, "descarga_si");
 
 				// empezar a escuchar
 				newsockfd = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
@@ -127,6 +127,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 				close(newsockfd);
 			}
 		}
+		dormir();
 	}
 	exit(0);
 }
@@ -170,6 +171,11 @@ int32_t levantar_archivos() {
 				imprimir(0);
 
         archivos[index] = malloc(sizeof(Archivo));
+				if(archivos[index] == NULL) {
+					sprintf(impresion, "error alocando memoria en Archivo\n");
+					imprimir(1);
+					exit(1);
+				}
 
 				char path[strlen(FILES_DIR_NAME) + strlen(ent->d_name) + 1];
 				sprintf(path, "%s%s", FILES_DIR_NAME, ent->d_name);
@@ -215,10 +221,9 @@ int32_t levantar_archivos() {
  * Enviar mensaje a cola de mensaje
  * @param id id de mensaje
  * @param mensaje mensaje a depositar
- * @param proceso 'p' para server, 'a' para auth, 'f' para file
  */
-void enviar_a_cola_local(long id, char* mensaje, char proceso) {
-	if(enviar_a_cola(id, mensaje, proceso) == -1) {
+void enviar_a_cola_local(long id, char* mensaje) {
+	if(enviar_a_cola(id, mensaje) == -1) {
 		sprintf(impresion, "error enviando mensaje\n");
 		imprimir(1);
 		exit(1);
@@ -282,6 +287,11 @@ void enviar_archivo(int32_t index_descarga) {
 	enviar_a_cliente(nombre_archivo);
 
 	char* path_archivo = malloc(strlen(FILES_DIR_NAME) + strlen(nombre_archivo));
+	if(path_archivo == NULL) {
+		sprintf(impresion, "error alocando memoria en path_archivo\n");
+		imprimir(1);
+		exit(1);
+	}
 	sprintf(path_archivo, "%s%s", FILES_DIR_NAME, nombre_archivo);
 	path_archivo[strlen(path_archivo)] = '\0';
 

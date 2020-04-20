@@ -10,7 +10,7 @@ void user_passwd(char*, char*);
 void file_command(char*, char*);
 void exit_command();
 void unknown_command();
-void enviar_a_cola_local(long, char*, char);
+void enviar_a_cola_local(long, char*);
 void configurar_socket();
 void imprimir(int32_t);
 void file_down(char*);

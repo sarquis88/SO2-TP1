@@ -5,6 +5,7 @@ ssize_t n;
 uint32_t clilen;
 struct sockaddr_in serv_addr, cli_addr;
 char buffer[BUFFER_SIZE], impresion[BUFFER_SIZE], direccion[16];
+char* mensaje_str;
 
 /**
  * Funcion main
@@ -30,27 +31,24 @@ int32_t main( int32_t argc, char *argv[] ) {
 	sprintf(impresion, "proceso: %d - puerto: %d\n", getpid(), ntohs(serv_addr.sin_port));
 	imprimir(0);
 
-	// creacion de cola
-	qid = get_cola('p');
-	if(qid == -1) {
-		sprintf(impresion, "error creando cola\n");
-		imprimir(1);
-		exit(1);
-	}
-
-	sprintf(impresion, "cola = %d\n", qid);
-	imprimir(0);
-
 	// empezar a escuchar
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
+
+	mensaje_str = malloc(QUEUE_MESAGE_SIZE);
+
 	while(1) {
 		socket_cliente = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
 
 		int32_t intentos = 0;
 		salida = 0;
 		int32_t log = 0;
-		char user_logueado[USUARIO_NOMBRE_SIZE];
+		char* user_logueado = malloc(USUARIO_NOMBRE_SIZE);
+		if(user_logueado == NULL) {
+			sprintf(impresion, "error alocando memoria en user_logueado\n");
+			imprimir(1);
+			exit(1);
+		}
 
 		sprintf(impresion, "autenticando\n");
 		imprimir(0);
@@ -64,17 +62,17 @@ int32_t main( int32_t argc, char *argv[] ) {
 				break;
 			}
 
-			enviar_a_cola_local((long) LOGIN_REQUEST, buffer, 'a'); // reenvio a auth_service
+			enviar_a_cola_local((long) LOGIN_REQUEST, buffer); // reenvio a auth_service
 
-			char* respuesta = recibir_de_cola(LOGIN_RESPONSE, 'p').mtext; // respuesta de auth_service
+			mensaje_str = recibir_de_cola(LOGIN_RESPONSE, 0); // respuesta de auth_service
 
-			if( respuesta[0] == '0') {
+			if( mensaje_str[0] == '0') {
 				intentos++;
 				if(intentos >= LIMITE_INTENTOS) {
 					char* nombre = strtok(buffer, "-");
 					sprintf(impresion, "usuario bloqueado: %s\n", nombre);
 					imprimir(0);
-					enviar_a_cola_local((long) BLOQUEAR_USUARIO, nombre, 'a');
+					enviar_a_cola_local((long) BLOQUEAR_USUARIO, nombre);
 					enviar_a_cliente("9");
 					intentos = 0;
 					log = 0;
@@ -88,7 +86,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 					log = 0;
 				}
 			}
-			else if(respuesta[0] == '1') {
+			else if(mensaje_str[0] == '1') {
 				sprintf(user_logueado, "%s", strtok(buffer, "-"));
 				sprintf(impresion, "nuevo cliente: %s\n", user_logueado);
 				imprimir(0);
@@ -97,7 +95,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 				log = 1;
 				break;
 			}
-			else if(respuesta[0] == '9') {
+			else if(mensaje_str[0] == '9') {
 				char* nombre = strtok(buffer, "-");
 				sprintf(impresion, "usuario bloqueado: %s\n", nombre);
 				imprimir(0);
@@ -114,6 +112,7 @@ int32_t main( int32_t argc, char *argv[] ) {
 				parse(user_logueado);
 			}
 			salida = 0;
+			free(user_logueado);
 		}
 	}
 	exit(0);
@@ -172,9 +171,24 @@ void parse(char* usuario_logueado) {
 	buffer[strlen(buffer)-1] = '\0';
 
 	char* mensaje;
-	char opcion[COMANDO_SIZE];
-	char argumento[COMANDO_SIZE];
-	char comando[COMANDO_SIZE];
+	char* opcion = malloc(COMANDO_SIZE);
+	if(opcion == NULL) {
+		sprintf(impresion, "error alocando memoria en opcion\n");
+		imprimir(1);
+		exit(1);
+	}
+	char* argumento = malloc(COMANDO_SIZE);
+	if(argumento == NULL) {
+		sprintf(impresion, "error alocando memoria en argumento\n");
+		imprimir(1);
+		exit(1);
+	}
+	char* comando = malloc(COMANDO_SIZE);
+	if(comando == NULL) {
+		sprintf(impresion, "error alocando memoria en comando\n");
+		imprimir(1);
+		exit(1);
+	}
 	int32_t i = 0;
 
 	mensaje = strtok(buffer, " ");
@@ -208,6 +222,10 @@ void parse(char* usuario_logueado) {
 		file_command(opcion, argumento);
 	else
 		unknown_command();
+
+	free(comando);
+	free(opcion);
+	free(argumento);
 }
 
 /**
@@ -216,7 +234,7 @@ void parse(char* usuario_logueado) {
  * @param opcion opcion ingresada por el cliente
  * @param argumento argumento ingresado por el cliente
  */
-void user_command(char* usuario, char *opcion, char *argumento) {
+void user_command(char* usuario, char *opcion, char *argumento) {	//SEGUIR ACAAAAAAAAAAAAAAAAAAAAAAA
 	if( strcmp("ls", opcion) == 0 )
 		user_ls();
 	else if( strcmp("passwd", opcion) == 0 && strcmp(" ", argumento) != 0)
@@ -232,9 +250,19 @@ void user_command(char* usuario, char *opcion, char *argumento) {
  * Reaccion al comando user ls}
  */
 void user_ls() {
-	enviar_a_cola_local((long) NOMBRES_REQUEST, "n", 'a');
-	char* respuesta = recibir_de_cola(NOMBRES_RESPONSE, 'p').mtext; // respuesta de auth_service
-	enviar_a_cliente(respuesta);
+	enviar_a_cola_local((long) NOMBRES_REQUEST, "n");
+	mensaje_str = recibir_de_cola(NOMBRES_RESPONSE, 0); // respuesta de auth_service
+
+	char* respuesta_envio = malloc(strlen(mensaje_str));
+	if(respuesta_envio == NULL) {
+		sprintf(impresion, "error alocando memoria en respuesta_envio\n");
+		imprimir(1);
+		exit(1);
+	}
+	sprintf(respuesta_envio, "%s", mensaje_str);
+
+	enviar_a_cliente(respuesta_envio);
+	free(respuesta_envio);
 }
 
 /**
@@ -251,10 +279,15 @@ void user_passwd(char* usuario, char* clave) {
 
 	char* aux = "-";
 	char* tmp = malloc(strlen(usuario) + strlen(clave) + strlen(aux));
+	if(tmp == NULL) {
+		sprintf(impresion, "error alocando memoria en tmp\n");
+		imprimir(1);
+		exit(1);
+	}
 	sprintf(tmp,"%s%s%s", usuario, aux, clave);
-	enviar_a_cola_local((long) CAMBIAR_CLAVE_REQUEST, tmp, 'a');
+	enviar_a_cola_local((long) CAMBIAR_CLAVE_REQUEST, tmp);
 
-	recibir_de_cola((long) CAMBIAR_CLAVE_RESPONSE, 'p');
+	recibir_de_cola((long) CAMBIAR_CLAVE_RESPONSE, 0);
 
 	free(tmp);
 	enviar_a_cliente("Clave cambiada con exito");
@@ -273,7 +306,7 @@ void file_command(char *opcion, char *argumento) {
 	else {
 		enviar_a_cliente(	" Uso: file [opcion] <argumento>\n\n"
 							"	- ls : listado de archivos\n"
-							"	- down <archivo> : descarga de archivo");
+							"	- down <nombre_archivo> : descarga de archivo");
 	}
 }
 
@@ -281,9 +314,18 @@ void file_command(char *opcion, char *argumento) {
  * Reaccion al comando file ls
  */
 void file_ls() {
-	enviar_a_cola_local((long) ARCHIVOS_REQUEST, "n", 'f');
-	char* respuesta = recibir_de_cola(ARCHIVOS_RESPONSE, 'p').mtext;
-	enviar_a_cliente(respuesta);
+	enviar_a_cola_local((long) ARCHIVOS_REQUEST, "n");
+	mensaje_str = recibir_de_cola(ARCHIVOS_RESPONSE, 0);
+	char* respuesta_envio = malloc(strlen(mensaje_str));
+	if(respuesta_envio == NULL) {
+		sprintf(impresion, "error alocando memoria en respuesta_envio\n");
+		imprimir(1);
+		exit(1);
+	}
+	sprintf(respuesta_envio, "%s", mensaje_str);
+
+	enviar_a_cliente(respuesta_envio);
+	free(respuesta_envio);
 }
 
 /**
@@ -291,10 +333,19 @@ void file_ls() {
  * @param archivo_nombre
  */
 void file_down(char* archivo_nombre) {
-	enviar_a_cola_local((long) DESCARGA_REQUEST, archivo_nombre, 'f');
-	char* respuesta = recibir_de_cola(DESCARGA_RESPONSE, 'p').mtext;
-	enviar_a_cliente(respuesta);
-}
+	enviar_a_cola_local((long) DESCARGA_REQUEST, archivo_nombre);
+	mensaje_str = recibir_de_cola(DESCARGA_RESPONSE, 0);
+
+	char* respuesta_envio = malloc(strlen(mensaje_str));
+	if(respuesta_envio == NULL) {
+		sprintf(impresion, "error alocando memoria en respuesta_envio\n");
+		imprimir(1);
+		exit(1);
+	}
+	sprintf(respuesta_envio, "%s", mensaje_str);
+
+	enviar_a_cliente(respuesta_envio);
+	free(respuesta_envio);}
 
 /**
  * Reaccion a comando exit
@@ -321,10 +372,9 @@ void unknown_command() {
  * Enviar mensaje a cola de mensaje
  * @param id id de mensaje
  * @param mensaje mensaje a depositar
- * @param proceso 'p' para server, 'a' para auth, 'f' para file
  */
-void enviar_a_cola_local(long id, char* mensaje, char proceso) {
-	if(enviar_a_cola(id, mensaje, proceso) == -1) {
+void enviar_a_cola_local(long id, char* mensaje) {
+	if(enviar_a_cola(id, mensaje) == -1) {
 		sprintf(impresion, "error enviando mensaje\n");
 		imprimir(1);
 		exit(1);

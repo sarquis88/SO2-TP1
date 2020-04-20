@@ -14,6 +14,7 @@
 #include <openssl/md5.h>
 #include <unistd.h>
 #include <limits.h>
+#include <errno.h>
 
 #define CANTIDAD_USUARIOS 4
 #define USUARIO_CLAVE_SIZE 15
@@ -37,9 +38,7 @@
 #define BUFFER_SIZE 512
 #define PROJ_ID 66
 
-#define SERVER_QUEUE_FILE_NAME "resources/queues/primary_queue"
-#define FILESERV_QUEUE_FILE_NAME "resources/queues/file_queue"
-#define AUTH_QUEUE_FILE_NAME "resources/queues/auth_queue"
+#define QUEUE_FILE_NAME "src/launch.c"
 #define QUEUE_MESAGE_SIZE 480
 
 #define LOGIN_REQUEST 1
@@ -54,9 +53,12 @@
 #define DESCARGA_REQUEST 10
 #define DESCARGA_RESPONSE 11
 
-int32_t get_cola(char);
-int32_t enviar_a_cola(long, char*, char);
-struct msgbuf recibir_de_cola(long, char);
+#define SEC_TIME 0
+#define NSEC_TIME 100
+
+int32_t get_cola();
+int32_t enviar_a_cola(long, char*);
+char* recibir_de_cola(long, int32_t);
 char* get_md5(char*, ssize_t);
 void set_mbr_informacion(int32_t);
 void set_mbr_tipo(int32_t);
@@ -66,6 +68,7 @@ void set_mbr_inicio(int32_t);
 void set_mbr_final(int32_t);
 void print_particion(int32_t);
 void start_mbr_analisis();
+void dormir();
 
 ssize_t recv(int sockfd, void*, size_t, int);
 ssize_t send(int sockfd, const void*, size_t, int);
