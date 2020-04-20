@@ -1,0 +1,11 @@
+Compilacion:
+	make
+Doxygen:
+	make docs
+Clean:
+	make clean
+
+Para correr server:
+	./server <ip_server> <puerto_server>
+Para correr client:
+	./client <ip_server> <puerto_server>
