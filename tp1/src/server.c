@@ -35,20 +35,13 @@ int32_t main( int32_t argc, char *argv[] ) {
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
 
-	mensaje_str = malloc(QUEUE_MESAGE_SIZE);
-
 	while(1) {
 		socket_cliente = accept( sockfd, (struct sockaddr *) &cli_addr, &clilen );
 
 		int32_t intentos = 0;
 		salida = 0;
 		int32_t log = 0;
-		char* user_logueado = malloc(USUARIO_NOMBRE_SIZE);
-		if(user_logueado == NULL) {
-			sprintf(impresion, "error alocando memoria en user_logueado\n");
-			imprimir(1);
-			exit(1);
-		}
+		char user_logueado[USUARIO_NOMBRE_SIZE];
 
 		sprintf(impresion, "autenticando\n");
 		imprimir(0);
@@ -112,7 +105,6 @@ int32_t main( int32_t argc, char *argv[] ) {
 				parse(user_logueado);
 			}
 			salida = 0;
-			free(user_logueado);
 		}
 	}
 	exit(0);
@@ -171,24 +163,10 @@ void parse(char* usuario_logueado) {
 	buffer[strlen(buffer)-1] = '\0';
 
 	char* mensaje;
-	char* opcion = malloc(COMANDO_SIZE);
-	if(opcion == NULL) {
-		sprintf(impresion, "error alocando memoria en opcion\n");
-		imprimir(1);
-		exit(1);
-	}
-	char* argumento = malloc(COMANDO_SIZE);
-	if(argumento == NULL) {
-		sprintf(impresion, "error alocando memoria en argumento\n");
-		imprimir(1);
-		exit(1);
-	}
-	char* comando = malloc(COMANDO_SIZE);
-	if(comando == NULL) {
-		sprintf(impresion, "error alocando memoria en comando\n");
-		imprimir(1);
-		exit(1);
-	}
+	char opcion[COMANDO_SIZE];
+	char argumento[COMANDO_SIZE];
+	char comando[COMANDO_SIZE];
+
 	int32_t i = 0;
 
 	mensaje = strtok(buffer, " ");
@@ -222,11 +200,7 @@ void parse(char* usuario_logueado) {
 		file_command(opcion, argumento);
 	else
 		unknown_command();
-
-	free(comando);
-	free(opcion);
-	free(argumento);
-}
+	}
 
 /**
  * Reaccion a comando user
@@ -253,7 +227,7 @@ void user_ls() {
 	enviar_a_cola_local((long) NOMBRES_REQUEST, "n");
 	mensaje_str = recibir_de_cola(NOMBRES_RESPONSE, 0); // respuesta de auth_service
 
-	char* respuesta_envio = malloc(strlen(mensaje_str));
+	char respuesta_envio[strlen(mensaje_str)];
 	if(respuesta_envio == NULL) {
 		sprintf(impresion, "error alocando memoria en respuesta_envio\n");
 		imprimir(1);
@@ -262,7 +236,7 @@ void user_ls() {
 	sprintf(respuesta_envio, "%s", mensaje_str);
 
 	enviar_a_cliente(respuesta_envio);
-	free(respuesta_envio);
+
 }
 
 /**
@@ -278,18 +252,12 @@ void user_passwd(char* usuario, char* clave) {
 	}
 
 	char* aux = "-";
-	char* tmp = malloc(strlen(usuario) + strlen(clave) + strlen(aux));
-	if(tmp == NULL) {
-		sprintf(impresion, "error alocando memoria en tmp\n");
-		imprimir(1);
-		exit(1);
-	}
+	char tmp[strlen(usuario) + strlen(clave) + strlen(aux)];
 	sprintf(tmp,"%s%s%s", usuario, aux, clave);
 	enviar_a_cola_local((long) CAMBIAR_CLAVE_REQUEST, tmp);
 
 	recibir_de_cola((long) CAMBIAR_CLAVE_RESPONSE, 0);
 
-	free(tmp);
 	enviar_a_cliente("Clave cambiada con exito");
 }
 
@@ -316,16 +284,12 @@ void file_command(char *opcion, char *argumento) {
 void file_ls() {
 	enviar_a_cola_local((long) ARCHIVOS_REQUEST, "n");
 	mensaje_str = recibir_de_cola(ARCHIVOS_RESPONSE, 0);
-	char* respuesta_envio = malloc(strlen(mensaje_str));
-	if(respuesta_envio == NULL) {
-		sprintf(impresion, "error alocando memoria en respuesta_envio\n");
-		imprimir(1);
-		exit(1);
-	}
+	char respuesta_envio[strlen(mensaje_str)];
+
 	sprintf(respuesta_envio, "%s", mensaje_str);
 
 	enviar_a_cliente(respuesta_envio);
-	free(respuesta_envio);
+
 }
 
 /**
@@ -336,22 +300,17 @@ void file_down(char* archivo_nombre) {
 	enviar_a_cola_local((long) DESCARGA_REQUEST, archivo_nombre);
 	mensaje_str = recibir_de_cola(DESCARGA_RESPONSE, 0);
 
-	char* respuesta_envio = malloc(strlen(mensaje_str));
-	if(respuesta_envio == NULL) {
-		sprintf(impresion, "error alocando memoria en respuesta_envio\n");
-		imprimir(1);
-		exit(1);
-	}
+	char respuesta_envio[strlen(mensaje_str)];
 	sprintf(respuesta_envio, "%s", mensaje_str);
 
 	enviar_a_cliente(respuesta_envio);
-	free(respuesta_envio);}
+}
 
 /**
  * Reaccion a comando exit
  * @param usuario nombre de usuario
  */
-void exit_command(char* usuario) {
+ void exit_command(char* usuario) {
 	sprintf(impresion, "%s ha salido\n", usuario);
 	imprimir(0);
 	salida = 1;

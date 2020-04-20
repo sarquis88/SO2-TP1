@@ -9,8 +9,6 @@ make:
 	gcc $(FLAGS) src/client.c src/utilities.c -o bin/client
 	gcc $(FLAGS) src/launch.c -o bin/launch
 clean:
-	rm bin/*
-	rm -r html/ latex/
-	rm resources/files/*
+	rm -r bin/* resources/files/* html/ latex/
 docs:
 	doxygen Doxyfile

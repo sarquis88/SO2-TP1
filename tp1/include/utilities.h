@@ -54,7 +54,7 @@
 #define DESCARGA_RESPONSE 11
 
 #define SEC_TIME 0
-#define NSEC_TIME 100
+#define NSEC_TIME 200
 
 int32_t get_cola();
 int32_t enviar_a_cola(long, char*);

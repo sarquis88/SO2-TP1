@@ -38,8 +38,6 @@ int32_t main( int32_t argc, char *argv[] ) {
 	listen( sockfd, 5 );
 	clilen = sizeof( cli_addr );
 
-	mensaje_str = malloc(QUEUE_MESAGE_SIZE);
-
   while(1) {
 
 		/*

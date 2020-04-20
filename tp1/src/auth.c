@@ -22,8 +22,6 @@ int32_t main() {
 		exit(1);
 	}
 
-	mensaje_str = malloc(QUEUE_MESAGE_SIZE);
-
 	// empezar a escuchar mensajes en cola
   while(1) {
 
@@ -40,7 +38,7 @@ int32_t main() {
 			sprintf(impresion, "login request: %s\n", mensaje_str);
 			imprimir(0);
 
-			char* credenciales = malloc(strlen(mensaje_str));
+			char credenciales[strlen(mensaje_str)];
 			if(credenciales == NULL) {
 				sprintf(impresion, "error alocando memoria en credenciales\n");
 				imprimir(1);
@@ -50,9 +48,7 @@ int32_t main() {
 
 			int32_t log = login(credenciales);
 
-			free(credenciales);
-
-			char* rta = malloc(2);
+			char rta[2] = "";
 			if(rta == NULL) {
 				sprintf(impresion, "error alocando memoria en rta\n");
 				imprimir(1);
@@ -68,7 +64,6 @@ int32_t main() {
 			enviar_a_cola_local((long) LOGIN_RESPONSE, rta);
 			sprintf(impresion, "login response (rta: %s)\n", rta);
 			imprimir(0);
-			free(rta);
 		}
 
 		mensaje_str = recibir_de_cola((long) BLOQUEAR_USUARIO, MSG_NOERROR | IPC_NOWAIT);
@@ -77,7 +72,7 @@ int32_t main() {
 			sprintf(impresion, "bloquear usuario: %s\n", mensaje_str);
 			imprimir(0);
 
-			char* usuario_a_bloquear = malloc(strlen(mensaje_str));
+			char usuario_a_bloquear[strlen(mensaje_str)];
 			if(usuario_a_bloquear == NULL) {
 				sprintf(impresion, "error alocando memoria en usuario_a_bloquear\n");
 				imprimir(1);
@@ -90,7 +85,6 @@ int32_t main() {
 				imprimir(1);
 				exit(1);
 			}
-			free(usuario_a_bloquear);
 		}
 
 		mensaje_str = recibir_de_cola((long) NOMBRES_REQUEST, MSG_NOERROR | IPC_NOWAIT);
@@ -111,7 +105,7 @@ int32_t main() {
 					size = size + strlen(salto);
 			}
 
-			char* users_info = malloc(size);
+			char users_info[size];;
 			if(users_info == NULL) {
 				sprintf(impresion, "error alocando memoria en users_info\n");
 				imprimir(1);
@@ -139,7 +133,6 @@ int32_t main() {
 			enviar_a_cola_local((long) NOMBRES_RESPONSE, users_info);
 			sprintf(impresion, "nombres response\n");
 			imprimir(0);
-			free(users_info);
 		}
 
 		mensaje_str = recibir_de_cola((long) CAMBIAR_CLAVE_REQUEST, MSG_NOERROR | IPC_NOWAIT);
@@ -148,7 +141,7 @@ int32_t main() {
 			sprintf(impresion, "cambiar clave request\n");
 			imprimir(0);
 
-			char* nuevas_credenciales = malloc(strlen(mensaje_str));
+			char nuevas_credenciales[strlen(mensaje_str)];
 			if(nuevas_credenciales == NULL) {
 				sprintf(impresion, "error alocando memoria en nuevas_credenciales\n");
 				imprimir(1);
@@ -158,7 +151,6 @@ int32_t main() {
 
 			cambiar_clave(nuevas_credenciales);
 
-			free(nuevas_credenciales);
 
 			enviar_a_cola_local((long) CAMBIAR_CLAVE_RESPONSE, "n");
 			sprintf(impresion, "cambiar clave response\n");
